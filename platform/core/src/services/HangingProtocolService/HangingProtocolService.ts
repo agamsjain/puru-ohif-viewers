@@ -422,7 +422,7 @@ export default class HangingProtocolService extends PubSubService {
     }
 
     this.customImageLoadPerformed = true;
-    this._broadcastChange(this.EVENTS.CUSTOM_IMAGE_LOAD_PERFORMED, loadedData);
+    this._broadcastEvent(this.EVENTS.CUSTOM_IMAGE_LOAD_PERFORMED, loadedData);
     return true;
   }
 
@@ -758,7 +758,7 @@ export default class HangingProtocolService extends PubSubService {
         'disabled';
     }
 
-    this._broadcastChange(this.EVENTS.STAGE_ACTIVATION, {
+    this._broadcastEvent(this.EVENTS.STAGE_ACTIVATION, {
       protocol: this.protocol,
       stages: this.protocol.stages,
     });
@@ -796,31 +796,42 @@ export default class HangingProtocolService extends PubSubService {
     return firstNotDisabled;
   }
 
+  /** Gets the current state, used to record the state when trying to apply items */
+  public getCurrentState(): Record<string, unknown> {
+    return {
+      protocol: this.protocol,
+      stage: this.stage,
+      viewportMatchDetails: this.viewportMatchDetails,
+      displaySetMatchDetails: this.displaySetMatchDetails,
+      activeImageLoadStrategyName: this.activeImageLoadStrategyName,
+    };
+  }
+
   private _setProtocol(
     protocol: HangingProtocol.Protocol,
     options = null as HangingProtocol.SetProtocolOptions
   ): void {
-    const oldProtocol = this.protocol;
-    const oldStage = this.stage;
-    if (!this.protocol || this.protocol.id !== protocol.id) {
-      this.stage = options?.stageIndex || 0;
-      this.protocol = this._copyProtocol(protocol);
-
-      const { imageLoadStrategy } = protocol;
-      if (imageLoadStrategy) {
-        // check if the imageLoadStrategy is a valid strategy
-        if (
-          this.registeredImageLoadStrategies[imageLoadStrategy] instanceof
-          Function
-        ) {
-          this.activeImageLoadStrategyName = imageLoadStrategy;
-        }
-      }
-
-      this._updateStageActivation(options);
-    }
+    const old = this.getCurrentState();
 
     try {
+      if (!this.protocol || this.protocol.id !== protocol.id) {
+        this.stage = options?.stageIndex || 0;
+        this.protocol = this._copyProtocol(protocol);
+
+        const { imageLoadStrategy } = protocol;
+        if (imageLoadStrategy) {
+          // check if the imageLoadStrategy is a valid strategy
+          if (
+            this.registeredImageLoadStrategies[imageLoadStrategy] instanceof
+            Function
+          ) {
+            this.activeImageLoadStrategyName = imageLoadStrategy;
+          }
+        }
+
+        this._updateStageActivation(options);
+      }
+
       const stage = this._findStage(options);
       if (stage === undefined) {
         throw new Error(
@@ -831,13 +842,12 @@ export default class HangingProtocolService extends PubSubService {
       this._updateViewports(options);
     } catch (error) {
       console.log(error);
-      this.protocol = oldProtocol;
-      this.stage = oldStage;
+      Object.assign(this, old);
       throw new Error(error);
     }
 
     if (options?.restoreProtocol !== true) {
-      this._broadcastChange(HangingProtocolService.EVENTS.PROTOCOL_CHANGED, {
+      this._broadcastEvent(HangingProtocolService.EVENTS.PROTOCOL_CHANGED, {
         viewportMatchDetails: this.viewportMatchDetails,
         displaySetMatchDetails: this.displaySetMatchDetails,
         protocol: this.protocol,
@@ -846,7 +856,7 @@ export default class HangingProtocolService extends PubSubService {
         activeStudyUID: this.activeStudy?.StudyInstanceUID,
       });
     } else {
-      this._broadcastChange(HangingProtocolService.EVENTS.RESTORE_PROTOCOL, {
+      this._broadcastEvent(HangingProtocolService.EVENTS.RESTORE_PROTOCOL, {
         protocol: this.protocol,
         stageIdx: this.stage,
         stage: this.protocol.stages[this.stage],
@@ -970,7 +980,7 @@ export default class HangingProtocolService extends PubSubService {
 
     const { columns: numCols, rows: numRows, layoutOptions = [] } = layoutProps;
 
-    this._broadcastChange(this.EVENTS.NEW_LAYOUT, {
+    this._broadcastEvent(this.EVENTS.NEW_LAYOUT, {
       layoutType,
       numRows,
       numCols,
@@ -1424,8 +1434,8 @@ export default class HangingProtocolService extends PubSubService {
     this._updateViewports(options);
 
     // Everything went well, broadcast the update, exactly identical to
-    // HP applied.
-    this._broadcastChange(this.EVENTS.PROTOCOL_CHANGED, {
+    // HP applied
+    this._broadcastEvent(this.EVENTS.PROTOCOL_CHANGED, {
       viewportMatchDetails: this.viewportMatchDetails,
       displaySetMatchDetails: this.displaySetMatchDetails,
       protocol: this.protocol,
@@ -1441,28 +1451,6 @@ export default class HangingProtocolService extends PubSubService {
   debug(...args): void {
     if (this.debugLogging) {
       console.log(...args);
-    }
-  }
-
-  /**
-   * Broadcasts hanging protocols changes.
-   *
-   * @param {string} eventName The event name.add
-   * @param {object} eventData.source The measurement source.
-   * @param {object} eventData.measurement The measurement.
-   * @param {boolean} eventData.notYetUpdatedAtSource True if the measurement was edited
-   *      within the measurement service and the source needs to update.
-   * @return void
-   */
-  // Todo: why do we have a separate broadcastChange function here?
-  _broadcastChange(eventName, eventData) {
-    const hasListeners = Object.keys(this.listeners).length > 0;
-    const hasCallbacks = Array.isArray(this.listeners[eventName]);
-
-    if (hasListeners && hasCallbacks) {
-      this.listeners[eventName].forEach(listener => {
-        listener.callback(eventData);
-      });
     }
   }
 

@@ -556,7 +556,6 @@ class CornerstoneViewportService extends PubSubService
       toolGroupService,
     } = this.servicesManager.services;
 
-    console.log('Setting volumes', volumeInputArray);
     await viewport.setVolumes(volumeInputArray);
 
     // load any secondary displaySets

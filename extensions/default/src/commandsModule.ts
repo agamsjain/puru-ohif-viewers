@@ -68,10 +68,8 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
         // the activeViewportId
         const state = viewportGridService.getState();
         const { hpInfo } = state;
-        const { reuseIdMap, viewportGridStore, hanging } = reuseCachedLayouts(
-          state,
-          stateSyncService
-        );
+        const stateSyncReduce = reuseCachedLayouts(state, stateSyncService);
+        const { hanging, viewportGridStore, reuseIdMap } = stateSyncReduce;
 
         if (!protocolId) {
           // Re-use the previous protocol id, and optionally stage
@@ -128,6 +126,8 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
             );
           }
         }
+        // Do this after successfully applying the update
+        stateSyncService.reduce(stateSyncReduce);
         return true;
       } catch (e) {
         uiNotificationService.show({

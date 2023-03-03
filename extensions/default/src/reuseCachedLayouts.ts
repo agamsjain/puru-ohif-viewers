@@ -37,8 +37,7 @@ const reuseCachedLayout = (state, syncService) => {
     }
   }
 
-  const toReduce = { hanging, viewportGridStore, reuseIdMap };
-  return syncService.reduce(toReduce);
+  return { hanging, viewportGridStore, reuseIdMap };
 };
 
 export default reuseCachedLayout;
