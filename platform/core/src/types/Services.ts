@@ -5,6 +5,7 @@ import {
   ViewportGridService,
   ToolbarService,
   DisplaySetService,
+  StateSyncService,
 } from '../services';
 
 /**
@@ -27,4 +28,5 @@ export default interface Services {
   syncGroupService?: Record<string, unknown>;
   cornerstoneCacheService?: Record<string, unknown>;
   segmentationService?: Record<string, unknown>;
+  stateSyncService?: StateSyncService;
 }

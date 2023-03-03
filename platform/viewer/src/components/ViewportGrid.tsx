@@ -23,11 +23,12 @@ const ORIENTATION_MAP = {
   },
 };
 
-const createHpInfo = (protocol, stage) => {
+const createHpInfo = (protocol, stage, activeStudyUID) => {
   return {
     hangingProtocolId: protocol.id,
     stageId: stage.stageId,
     stageIdx: protocol.stages.findIndex(it => it === stage),
+    activeStudyUID,
   };
 };
 
@@ -63,6 +64,7 @@ function ViewerViewportGrid(props) {
   const updateDisplaySetsFromProtocol = (
     protocol,
     stage,
+    activeStudyUID,
     viewportMatchDetails
   ) => {
     const availableDisplaySets = displaySetService.getActiveDisplaySets();
@@ -117,7 +119,7 @@ function ViewerViewportGrid(props) {
       numCols,
       layoutType,
       layoutOptions,
-      hpInfo: createHpInfo(protocol, stage),
+      hpInfo: createHpInfo(protocol, stage, activeStudyUID),
       findOrCreateViewport,
     });
   };
@@ -150,8 +152,13 @@ function ViewerViewportGrid(props) {
   useEffect(() => {
     const { unsubscribe } = hangingProtocolService.subscribe(
       hangingProtocolService.EVENTS.PROTOCOL_CHANGED,
-      ({ protocol, stage, viewportMatchDetails }) => {
-        updateDisplaySetsFromProtocol(protocol, stage, viewportMatchDetails);
+      ({ protocol, stage, activeStudyUID, viewportMatchDetails }) => {
+        updateDisplaySetsFromProtocol(
+          protocol,
+          stage,
+          activeStudyUID,
+          viewportMatchDetails
+        );
       }
     );
 

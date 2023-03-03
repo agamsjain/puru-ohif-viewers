@@ -12,6 +12,7 @@ class ViewportGridService extends PubSubService {
       return new ViewportGridService();
     },
   };
+  public static EVENTS = EVENTS;
 
   serviceImplementation = {};
 

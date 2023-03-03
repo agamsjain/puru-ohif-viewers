@@ -501,7 +501,7 @@ const defaultFilterValues = {
 
 function _tryParseInt(str, defaultValue) {
   let retValue = defaultValue;
-  if (str != null) {
+  if (str !== null && str !== undefined) {
     if (str.length > 0) {
       if (!isNaN(str)) {
         retValue = parseInt(str);

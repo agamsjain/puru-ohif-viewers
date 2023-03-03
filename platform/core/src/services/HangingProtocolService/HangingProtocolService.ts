@@ -12,21 +12,22 @@ const DEFAULT_VIEWPORT_OPTIONS: HangingProtocol.ViewportOptions = {
   viewportType: 'stack',
 };
 
-class HangingProtocolService extends PubSubService {
+export default class HangingProtocolService extends PubSubService {
   static EVENTS = {
-  PROTOCOL_CHANGED: 'event::hanging_protocol_changed',
-  NEW_LAYOUT: 'event::hanging_protocol_new_layout',
+    // The PROTOCOL_CHANGED event is fired when the protocol changes
+    // and should be immediately applied
+    PROTOCOL_CHANGED: 'event::hanging_protocol_changed',
+    // The RESTORE_PROTOCOL event is fired instead of a changed event to indicate
+    // that an earlier state has been restored as part of a state update, but
+    // is not being directly re-applied, but just restored.
+    RESTORE_PROTOCOL: 'event::hanging_protocol_restore',
+    // The layout has been decided for the hanging protocol - deprecated
+    NEW_LAYOUT: 'event::hanging_protocol_new_layout',
+    // Equivalent to PROTOCOL_CHANGED, except for stage instead.  Moslty
+    // this can be ignored in favour of protocol changed.
     STAGE_ACTIVATION: 'event::hanging_protocol_stage_activation',
-  CUSTOM_IMAGE_LOAD_PERFORMED:
-    'event::hanging_protocol_custom_image_load_performed',
-};
-
-  public static REGISTRATION = {
-    name: 'hangingProtocolService',
-    altName: 'HangingProtocolService',
-    create: ({ configuration = {}, commandsManager, servicesManager }) => {
-      return new HangingProtocolService(commandsManager, servicesManager);
-    },
+    CUSTOM_IMAGE_LOAD_PERFORMED:
+      'event::hanging_protocol_custom_image_load_performed',
   };
 
   public static REGISTRATION = {
@@ -50,7 +51,7 @@ class HangingProtocolService extends PubSubService {
   protocolEngine: ProtocolEngine;
   customViewportSettings = [];
   displaySets: IDisplaySet[] = [];
-  activeStudy: Record<string, unknown>;
+  activeStudy: StudyMetadata;
   debugLogging: false;
 
   customAttributeRetrievalCallbacks = {
@@ -131,11 +132,20 @@ class HangingProtocolService extends PubSubService {
     this.reset();
   }
 
+  /**
+   * Gets the active protocol information
+   * @returns protocol, stage, activeStudyUID
+   */
   public getActiveProtocol(): {
     protocol: HangingProtocol.Protocol;
     stage: number;
+    activeStudyUID?: string;
   } {
-    return { protocol: this.protocol, stage: this.stage };
+    return {
+      protocol: this.protocol,
+      stage: this.stage,
+      activeStudyUID: this.activeStudy?.StudyInstanceUID,
+    };
   }
 
   public getDefaultProtocol(): HangingProtocol.Protocol {
@@ -180,13 +190,13 @@ class HangingProtocolService extends PubSubService {
    * @param protocolId - the id of the protocol
    * @returns protocol - the protocol with the given id
    */
-  public getProtocolById(id: string): HangingProtocol.Protocol | undefined {
-    if (!id) {
-      return;
-    }
-
+  public getProtocolById(id: string): HangingProtocol.Protocol {
+    if (!id) return;
     if (id === this.protocol?.id) return this.protocol;
     const protocol = this.protocols.get(id);
+    if (!protocol) {
+      throw new Error(`No protocol ${id} found`);
+    }
 
     if (protocol instanceof Function) {
       try {
@@ -261,6 +271,17 @@ class HangingProtocolService extends PubSubService {
   }
 
   /**
+   * Sets the active study.
+   * This is the study that the hanging protocol will consider active and
+   * may or may not be the study that is being shown by the protocol currently,
+   * for example, a prior view hanging protocol will NOT show the active study
+   * specifically, but will show another study instead.
+   */
+  public setActiveStudy(activeStudy: StudyMetadata): void {
+    this.activeStudy = activeStudy;
+  }
+
+  /**
    * Run the hanging protocol decisions tree on the active study,
    * studies list and display sets, firing a PROTOCOL_CHANGED event when
    * complete to indicate the hanging protocol is ready, and which stage
@@ -280,7 +301,7 @@ class HangingProtocolService extends PubSubService {
   public run({ studies, displaySets, activeStudy }, protocolId) {
     this.studies = [...(studies || this.studies)];
     this.displaySets = displaySets;
-    this.activeStudy = activeStudy || studies[0];
+    this.setActiveStudy(activeStudy || studies[0]);
 
     this.protocolEngine = new ProtocolEngine(
       this.getProtocols(),
@@ -442,6 +463,16 @@ class HangingProtocolService extends PubSubService {
     if (!stages) {
       console.warn('Protocol has not stages:', protocol.id, protocol);
       return;
+    }
+
+    for (const id of Object.keys(protocol.displaySetSelectors)) {
+      const selector = protocol.displaySetSelectors[id];
+      selector.id = id;
+      const { seriesMatchingRules } = selector;
+      if (!seriesMatchingRules) {
+        console.warn('Selector has no series matching rules', protocol.id, id);
+        return;
+      }
     }
 
     // Generate viewports automatically as required.
@@ -646,13 +677,13 @@ class HangingProtocolService extends PubSubService {
       return;
     }
 
-    const protocol = this._validateProtocol(foundProtocol);
-
-    if (options) {
-      this._validateOptions(options);
-    }
-
     try {
+      const protocol = this._validateProtocol(foundProtocol);
+
+      if (options) {
+        this._validateOptions(options);
+      }
+
       this._setProtocol(protocol, options);
     } catch (error) {
       console.log(error);
@@ -692,6 +723,28 @@ class HangingProtocolService extends PubSubService {
         stage.enable = 'enabled';
         continue;
       }
+
+      const { displaySetSelectors } = this.protocol;
+      const { requiredDs = [] } = stage;
+      stage.enable = 'enabled';
+      for (const dsName of requiredDs) {
+        const displaySetSelector = displaySetSelectors[dsName];
+        if (!displaySetSelector) {
+          console.warn('No display set selector for', dsName);
+          stage.enable = 'disabled';
+          break;
+        }
+        const { bestMatch } = this._matchImages(displaySetSelector);
+        if (!bestMatch) {
+          stage.enable = 'disabled';
+          console.log('requiredDs failed to match', dsName, stage.name);
+          break;
+        }
+      }
+      if (stage.enable === 'disabled') {
+        continue;
+      }
+
       const { matchedViewports } = this._matchAllViewports(
         stage,
         options,
@@ -711,7 +764,7 @@ class HangingProtocolService extends PubSubService {
 
   private _findStage(
     options = null as HangingProtocol.SetProtocolOptions
-  ): number {
+  ): number | void {
     const stageId = options?.stageId;
     const protocol = this.protocol;
     const stages = protocol.stages;
@@ -721,12 +774,12 @@ class HangingProtocolService extends PubSubService {
         const stage = stages[i];
         if (stage.id === stageId && stage.enable !== 'disabled') return i;
       }
-      return 0;
+      return;
     }
 
     const stageIndex = options?.stageIndex;
-    if (stageIndex !== undefined && stages[stageIndex]?.enable !== 'disabled') {
-      return stageIndex;
+    if (stageIndex !== undefined) {
+      return stages[stageIndex]?.enable !== 'disabled' ? stageIndex : undefined;
     }
 
     let firstNotDisabled: number;
@@ -738,7 +791,7 @@ class HangingProtocolService extends PubSubService {
       }
     }
 
-    return firstNotDisabled ?? 0;
+    return firstNotDisabled;
   }
 
   private _setProtocol(
@@ -749,40 +802,55 @@ class HangingProtocolService extends PubSubService {
     const oldStage = this.stage;
     if (!this.protocol || this.protocol.id !== protocol.id) {
       this.stage = options?.stageIndex || 0;
-    this.protocol = this._copyProtocol(protocol);
+      this.protocol = this._copyProtocol(protocol);
 
-    const { imageLoadStrategy } = protocol;
-    if (imageLoadStrategy) {
-      // check if the imageLoadStrategy is a valid strategy
-      if (
-        this.registeredImageLoadStrategies[imageLoadStrategy] instanceof
-        Function
-      ) {
-        this.activeImageLoadStrategyName = imageLoadStrategy;
+      const { imageLoadStrategy } = protocol;
+      if (imageLoadStrategy) {
+        // check if the imageLoadStrategy is a valid strategy
+        if (
+          this.registeredImageLoadStrategies[imageLoadStrategy] instanceof
+          Function
+        ) {
+          this.activeImageLoadStrategyName = imageLoadStrategy;
+        }
       }
-    }
 
       this._updateStageActivation(options);
     }
 
-    this.stage = this._findStage(options);
-
     try {
+      const stage = this._findStage(options);
+      if (stage === undefined) {
+        throw new Error(
+          `Can't find applicable stage ${protocol.id} ${options?.stageIndex}`
+        );
+      }
+      this.stage = stage as number;
       this._updateViewports(options);
     } catch (error) {
-      console.log('Caught error', error);
+      console.log(error);
       this.protocol = oldProtocol;
       this.stage = oldStage;
       throw new Error(error);
     }
 
-    this._broadcastChange(this.EVENTS.PROTOCOL_CHANGED, {
-      viewportMatchDetails: this.viewportMatchDetails,
-      displaySetMatchDetails: this.displaySetMatchDetails,
-      protocol: this.protocol,
-      stageIdx: this.stage,
-      stage: this.protocol.stages[this.stage],
-    });
+    if (options?.restoreProtocol !== true) {
+      this._broadcastChange(HangingProtocolService.EVENTS.PROTOCOL_CHANGED, {
+        viewportMatchDetails: this.viewportMatchDetails,
+        displaySetMatchDetails: this.displaySetMatchDetails,
+        protocol: this.protocol,
+        stageIdx: this.stage,
+        stage: this.protocol.stages[this.stage],
+        activeStudyUID: this.activeStudy?.StudyInstanceUID,
+      });
+    } else {
+      this._broadcastChange(HangingProtocolService.EVENTS.RESTORE_PROTOCOL, {
+        protocol: this.protocol,
+        stageIdx: this.stage,
+        stage: this.protocol.stages[this.stage],
+        activeStudyUID: this.activeStudy?.StudyInstanceUID,
+      });
+    }
   }
 
   public getStageIndex(hpId: string, options): number {
@@ -933,7 +1001,7 @@ class HangingProtocolService extends PubSubService {
         if (
           matchDetails.displaySetsInfo?.length &&
           matchDetails.displaySetsInfo[0].displaySetInstanceUID
-    ) {
+        ) {
           matchedViewports++;
         } else {
           console.log(
@@ -942,14 +1010,14 @@ class HangingProtocolService extends PubSubService {
           matchDetails.displaySetsInfo = viewport.displaySets.map(it => ({
             displaySetOptions: it,
           }));
-      }
+        }
         viewportMatchDetails.set(viewportIndex, matchDetails);
       }
     });
     return { matchedViewports, viewportMatchDetails, displaySetMatchDetails };
   }
 
-  private findDeduplicatedMatchDetails(
+  protected findDeduplicatedMatchDetails(
     matchDetails: HangingProtocol.DisplaySetMatchDetails,
     offset: number,
     options
@@ -973,7 +1041,19 @@ class HangingProtocolService extends PubSubService {
     return matchDetails.matchingScores[offset];
   }
 
-  private _matchViewport(
+  protected validateReuseId(
+    match: HangingProtocol.DisplaySetMatchDetails,
+    id: string,
+    dsUID: string
+  ): void {
+    if (match.displaySetInstanceUID === dsUID) return;
+    for (const subMatch of match.matchingScores) {
+      if (subMatch.displaySetInstanceUID === dsUID) return;
+    }
+    throw new Error(`Reused viewport details ${id} with ds ${dsUID} not valid`);
+  }
+
+  protected _matchViewport(
     viewport: HangingProtocol.Viewport,
     options: HangingProtocol.SetProtocolOptions,
     viewportMatchDetails = this.viewportMatchDetails,
@@ -983,37 +1063,49 @@ class HangingProtocolService extends PubSubService {
     const { displaySetSelectors = {} } = this.protocol;
 
     // Matching the displaySets
-      for (const displaySet of viewport.displaySets) {
-        const { id: displaySetId } = displaySet;
+    for (const displaySet of viewport.displaySets) {
+      const { id: displaySetId } = displaySet;
 
-        const displaySetSelector = displaySetSelectors[displaySetId];
+      const displaySetSelector = displaySetSelectors[displaySetId];
 
-        if (!displaySetSelector) {
-          console.warn('No display set selector for', displaySetId);
-          continue;
-        }
-        const { bestMatch, matchingScores } = this._matchImages(
-          displaySetSelector
-        );
+      if (!displaySetSelector) {
+        console.warn('No display set selector for', displaySetId);
+        continue;
+      }
+      const { bestMatch, matchingScores } = this._matchImages(
+        displaySetSelector
+      );
       displaySetMatchDetails.set(displaySetId, bestMatch);
 
-        if (bestMatch) {
-          bestMatch.matchingScores = matchingScores;
-        }
+      if (bestMatch) {
+        bestMatch.matchingScores = matchingScores;
       }
+    }
 
     // Loop through each viewport
     const { viewportOptions = DEFAULT_VIEWPORT_OPTIONS } = viewport;
-      // DisplaySets for the viewport, Note: this is not the actual displaySet,
-      // but it is a info to locate the displaySet from the displaySetService
-      const displaySetsInfo = [];
+    // DisplaySets for the viewport, Note: this is not the actual displaySet,
+    // but it is a info to locate the displaySet from the displaySetService
+    const displaySetsInfo = [];
+    const { StudyInstanceUID: activeStudyUID } = this.activeStudy;
     viewport.displaySets.forEach(displaySetOptions => {
       const { id, displaySetIndex = 0, reuseId } = displaySetOptions;
-      const reuseDisplaySetUID = reuseId && reuseIdMap[reuseId];
-          const viewportDisplaySetMain = this.displaySetMatchDetails.get(id);
+      const reuseDisplaySetUID =
+        reuseId && reuseIdMap[`${activeStudyUID}:${reuseId}`];
+      const viewportDisplaySetMain = this.displaySetMatchDetails.get(id);
+
+      const viewportDisplaySet = this.findDeduplicatedMatchDetails(
+        viewportDisplaySetMain,
+        displaySetIndex,
+        options
+      );
 
       // Use the display set provided instead
       if (reuseDisplaySetUID) {
+        if (displaySetOptions.validateReuseId) {
+          console.log('Validating reuseId', reuseDisplaySetUID, id);
+          this.validateReuseId(viewportDisplaySet, id, reuseDisplaySetUID);
+        }
         const displaySetInfo: HangingProtocol.DisplaySetInfo = {
           displaySetInstanceUID: reuseDisplaySetUID,
           displaySetOptions,
@@ -1023,38 +1115,31 @@ class HangingProtocolService extends PubSubService {
         return;
       }
 
-          // Use the display set index to allow getting the "next" match, eg
-          // matching all display sets, and get the displaySetIndex'th item
-
-      const viewportDisplaySet = this.findDeduplicatedMatchDetails(
-        viewportDisplaySetMain,
-        displaySetIndex,
-        options
-      );
-
-          if (viewportDisplaySet) {
+      // Use the display set index to allow getting the "next" match, eg
+      // matching all display sets, and get the displaySetIndex'th item
+      if (viewportDisplaySet) {
         const { displaySetInstanceUID } = viewportDisplaySet;
 
-            const displaySetInfo: HangingProtocol.DisplaySetInfo = {
-              displaySetInstanceUID,
-              displaySetOptions,
-            };
+        const displaySetInfo: HangingProtocol.DisplaySetInfo = {
+          displaySetInstanceUID,
+          displaySetOptions,
+        };
 
-            displaySetsInfo.push(displaySetInfo);
-          } else {
-            console.warn(
-              `
+        displaySetsInfo.push(displaySetInfo);
+      } else {
+        console.warn(
+          `
              The hanging protocol viewport is requesting to display ${id} displaySet that is not
              matched based on the provided criteria (e.g. matching rules).
             `
-            );
-          }
+        );
+      }
     });
     return {
-        viewportOptions,
-        displaySetsInfo,
-        };
-          }
+      viewportOptions,
+      displaySetsInfo,
+    };
+  }
 
   private _validateViewportSpecificMatch(
     displaySetAndViewportOptions: HangingProtocol.DisplaySetAndViewportOptions,
@@ -1138,7 +1223,11 @@ class HangingProtocolService extends PubSubService {
     // level matching needs to be added in future
 
     // Todo: handle fusion viewports by not taking the first displaySet rule for the viewport
-    const { studyMatchingRules = [], seriesMatchingRules } = displaySetRules;
+    const {
+      id,
+      studyMatchingRules = [],
+      seriesMatchingRules,
+    } = displaySetRules;
 
     const matchingScores = [];
     let highestSeriesMatchingScore = 0;
@@ -1149,9 +1238,9 @@ class HangingProtocolService extends PubSubService {
       seriesMatchingRules
     );
     const matchActiveOnly = this.protocol.numberOfPriorsReferenced === -1;
-
     this.studies.forEach(study => {
-      if (matchActiveOnly && study !== this.activeStudy) return;
+      // Skip non-active if active only
+      if (matchActiveOnly && this.activeStudy !== study) return;
       const studyDisplaySets = this.displaySets.filter(
         it => it.StudyInstanceUID === study.StudyInstanceUID
       );
@@ -1243,7 +1332,7 @@ class HangingProtocolService extends PubSubService {
     });
 
     if (matchingScores.length === 0) {
-      console.log('No match found');
+      console.log('No match found', id);
     }
 
     // Sort the matchingScores
@@ -1378,137 +1467,4 @@ class HangingProtocolService extends PubSubService {
   _copyProtocol(protocol: Protocol) {
     return JSON.parse(JSON.stringify(protocol));
   }
-
-  /**
-  _setProtocolLayoutOptions(protocol: Protocol, { numRows, numCols }) {
-    const layoutOptions = [];
-    const protocolStage = protocol.stages[this.stage];
-    const numViewports = protocolStage.viewports.length;
-
-    for (let i = 0; i < numViewports; i++) {
-      const { row, col } = unravelIndex(i, numRows, numCols);
-      const w = 1 / numCols;
-      const h = 1 / numRows;
-      const xPos = col * w;
-      const yPos = row * h;
-
-      layoutOptions[i] = {
-        width: w,
-        height: h,
-        x: xPos,
-        y: yPos,
-      };
-    }
-
-    // Todo: handle the case where the viewportStructure is not a grid
-    protocolStage.viewportStructure.properties.rows = numRows;
-    protocolStage.viewportStructure.properties.columns = numCols;
-    protocolStage.viewportStructure.properties.layoutOptions = {
-      ...layoutOptions,
-    };
-  }
-
-  _getUpdatedProtocol({
-    numRows,
-    numCols,
-    protocol: oldProtocol,
-  }: {
-    numRows: number;
-    numCols: number;
-    protocol: Protocol;
-  }): Protocol {
-    let newProtocol = this._copyProtocol(oldProtocol);
-
-    const protocolStage = newProtocol.stages[this.stage];
-
-     // The following commented code is a potential improvements to the
-     // hanging protocols to intelligently switch between number of rows
-     // and columns based on the old state of the protocol. For instance,
-     // changing from 2x2 to 2x3 (adding a column) right now reorders the viewports
-     // as well, however, it should just add one empty column to the right
-     // and leave the rest of the viewports in place. This sounds amazing,
-     // but comes at a cost (which we need to tackle later). The cost is that
-     // the viewportIndex will change during this smart change of layout. In
-     // the example above the viewport at index (2) bottom left, will now be
-     // at index (3) bottom left, and since react will re-render the viewport
-     // it will reset the viewport's state such as (zoom, pan, windowLevel, imageIndex)
-     // and the user will lose their current state. In addition, all our viewportIds
-     // are dependent on the viewportIndex, so we will need to update all the viewportIds
-     // as well, and you can see how this can get out of hand. Later, we should
-     // tackle this problem and make the smart change of layout work.
-
-    // const { rows: oldNumRows, columns: oldNumCols } = newProtocol.stages[
-    //   this.stage
-    // ].viewportStructure.properties;
-
-    // const oldToNewViewportIndices = getGridMapping(
-    //   {
-    //     numRows: oldNumRows,
-    //     numCols: oldNumCols,
-    //   },
-    //   {
-    //     numRows,
-    //     numCols,
-    //   }
-    // );
-
-    const protocolViewports = protocolStage.viewports;
-
-    if (protocolViewports.length < numRows * numCols) {
-      const newViewports = [];
-
-      for (let i = protocolViewports.length; i < numRows * numCols; i++) {
-        newViewports.push({
-          viewportOptions: {
-            toolGroupId: 'default',
-            viewportType: 'stack',
-          },
-          displaySets: [
-            {
-              id: getViewportId(i),
-            },
-          ],
-        });
-      }
-
-      protocolStage.viewports = [...protocolViewports, ...newViewports];
-    } else if (protocolViewports.length > numRows * numCols) {
-      // remove viewports that are not needed
-      protocolStage.viewports = protocolViewports.slice(0, numRows * numCols);
-    }
-
-    // update the displaySetMatchDetails to reflect the new viewports
-    const toRemove = [];
-    this.displaySetMatchDetails.forEach(
-      (displaySetMatchDetail, displaySetId) => {
-        // if the displaySetId is not referenced in the protocolStage viewports
-        // we can remove it
-        const found = protocolStage.viewports.find(viewport => {
-          return viewport.displaySets.find(displaySet => {
-            return displaySet.id === displaySetId;
-          });
-        });
-
-        if (!found) {
-          toRemove.push(displaySetId);
-        }
-      }
-    );
-
-    toRemove.forEach(displaySetId => {
-      this.displaySetMatchDetails.delete(displaySetId);
-    });
-
-    this._setProtocolLayoutOptions(newProtocol, { numRows, numCols });
-    newProtocol = this._validateProtocol(newProtocol);
-
-    // Todo: not sure if we need to reset here, or we can smartly update the
-    // viewportMatchDetails map
-    this.viewportMatchDetails = new Map();
-
-    return newProtocol;
-  }
-  */
 }
-
-export default HangingProtocolService;

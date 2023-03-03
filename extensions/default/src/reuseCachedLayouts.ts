@@ -1,9 +1,14 @@
 const reuseCachedLayout = (state, syncService) => {
   const { hpInfo, activeViewportIndex } = state;
-  const { hangingProtocolId, stageIdx, custom = false } = hpInfo;
-  const storeId = `${hangingProtocolId}:${stageIdx}`;
+  const {
+    hangingProtocolId,
+    stageIdx,
+    activeStudyUID,
+    custom = false,
+  } = hpInfo;
+  const storeId = `${activeStudyUID}:${hangingProtocolId}:${stageIdx}`;
   const syncState = syncService.getState();
-  const cacheId = hpInfo.hangingProtocolId;
+  const cacheId = `${activeStudyUID}:${hpInfo.hangingProtocolId}`;
   const viewportGridStore = { ...syncState.viewportGridStore };
   const hanging = { ...syncState.hanging };
   const reuseIdMap = { ...syncState.reuseIdMap };
@@ -22,11 +27,12 @@ const reuseCachedLayout = (state, syncService) => {
       const displaySetUID = displaySetInstanceUIDs[i];
       if (!displaySetUID) continue;
       if (idx === activeViewportIndex && i === 0) {
-        reuseIdMap.activeDisplaySet = displaySetUID;
+        console.log('Setting activeDisplaySet to', displaySetUID);
+        reuseIdMap[`${activeStudyUID}:activeDisplaySet`] = displaySetUID;
       }
       const reuseId = displaySetOptions[i]?.reuseId;
       if (reuseId) {
-        reuseIdMap[reuseId] = displaySetUID;
+        reuseIdMap[`${activeStudyUID}:${reuseId}`] = displaySetUID;
       }
     }
   }

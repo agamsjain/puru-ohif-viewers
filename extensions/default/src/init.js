@@ -29,6 +29,7 @@ export default function init({ servicesManager, configuration }) {
   stateSyncService.register('reuseIdMap', { isMode: true });
   stateSyncService.register('hanging', { isMode: true });
   stateSyncService.register('presentationSync', { isMode: true });
+  stateSyncService.register('toggleHangingProtocol', { isMode: true });
   stateSyncService.register('querySync', {});
 }
 

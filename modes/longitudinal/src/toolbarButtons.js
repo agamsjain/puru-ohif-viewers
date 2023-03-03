@@ -312,7 +312,7 @@ const toolbarButtons = [
       label: 'MPR',
       commands: [
         {
-          commandName: 'setHangingProtocol',
+          commandName: 'toggleHangingProtocol',
           commandOptions: {
             protocolId: 'mpr',
           },

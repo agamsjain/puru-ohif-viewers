@@ -51,7 +51,6 @@ export default class StateSyncService extends PubSubService {
 
   public reduce(obj: States): States {
     this.state = { ...this.state, ...obj };
-    console.log('reduce', JSON.stringify(obj));
     return obj;
   }
 

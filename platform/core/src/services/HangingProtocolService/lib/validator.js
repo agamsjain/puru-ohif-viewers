@@ -21,7 +21,7 @@ validate.validators.containsI = function (value, options, key) {
   if (Array.isArray(value)) {
     if (
       value.some(
-        item => !validate.validators.contains(item.toLowerCase(), options, key)
+        item => !validate.validators.containsI(item.toLowerCase(), options, key)
       )
     ) {
       return undefined;
@@ -33,7 +33,7 @@ validate.validators.containsI = function (value, options, key) {
   if (Array.isArray(testValue)) {
     if (
       testValue.some(
-        subTest => !validate.validators.contains(value, subTest, key)
+        subTest => !validate.validators.containsI(value, subTest, key)
       )
     ) {
       return;

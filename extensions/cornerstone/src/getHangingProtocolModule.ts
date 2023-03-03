@@ -31,6 +31,7 @@ const mpr: Types.HangingProtocol.Protocol = {
   stages: [
     {
       name: 'MPR 1x3',
+      requiredViewports: 2,
       viewportStructure: {
         layoutType: 'grid',
         properties: {
@@ -80,6 +81,7 @@ const mpr: Types.HangingProtocol.Protocol = {
             {
               id: 'mprDisplaySet',
               reuseId: 'activeDisplaySet',
+              validateReuseId: true,
             },
           ],
         },

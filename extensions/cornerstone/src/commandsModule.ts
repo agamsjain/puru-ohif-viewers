@@ -15,7 +15,6 @@ import { ServicesManager } from '@ohif/core';
 import CornerstoneViewportDownloadForm from './utils/CornerstoneViewportDownloadForm';
 import callInputDialog from './utils/callInputDialog';
 import { setColormap } from './utils/colormap/transferFunctionHelpers';
-import toggleMPRHangingProtocol from './utils/mpr/toggleMPRHangingProtocol';
 import toggleStackImageSync from './utils/stackSync/toggleStackImageSync';
 import getActiveViewportEnabledElement from './utils/getActiveViewportEnabledElement';
 
@@ -407,14 +406,6 @@ const commandsModule = ({
         (activeViewportIndex - 1 + viewports.length) % viewports.length;
       viewportGridService.setActiveViewportIndex(nextViewportIndex);
     },
-    toggleMPR: ({ toggledState }) => {
-      toggleMPRHangingProtocol({
-        toggledState,
-        servicesManager,
-        getToolGroup: _getToolGroup,
-      });
-    },
-
     toggleStackImageSync: ({ toggledState }) => {
       toggleStackImageSync({
         getEnabledElement,
@@ -552,11 +543,6 @@ const commandsModule = ({
     },
     setViewportColormap: {
       commandFn: actions.setViewportColormap,
-      storeContexts: [],
-      options: {},
-    },
-    toggleMPR: {
-      commandFn: actions.toggleMPR,
       storeContexts: [],
       options: {},
     },

@@ -31,6 +31,11 @@ export type SetProtocolOptions = {
   // TODO - make the stageId a regexp to allow searching for first matching
   stageId?: string;
   stageIndex?: number;
+
+  // Indicates to setup the protocol and fire the PROTOCOL_RESTORED event
+  // but don't fire the protocol changed event.  Used to restore the
+  // HP service to a previous state
+  restoreProtocol?: boolean;
 };
 
 export type HangingProtocolMatchDetails = {
@@ -93,6 +98,7 @@ export type ViewportStructure = {
  * it won't be selected.
  */
 export type DisplaySetSelector = {
+  id?: string;
   // The image matching rule (not currently implemented) selects which image to
   // display initially, only for stack views.
   imageMatchingRules?: MatchingRule[];
@@ -154,7 +160,7 @@ export type ViewportsRequired = number;
 export type StageEnabled = 'disabled' | 'enabled' | 'passive';
 
 export type ProtocolStage = {
-  id: string;
+  id?: string;
   name: string;
   viewportStructure: ViewportStructure;
   viewports: Viewport[];
@@ -164,6 +170,8 @@ export type ProtocolStage = {
   // The set of viewports that is preferred for this viewport, to be manually
   // activated
   preferredViewports?: ViewportsRequired;
+  // A set of display set selectors which are required
+  requiredDs?: string[];
   defaultViewport?: Viewport;
   createdDate?: string;
 };

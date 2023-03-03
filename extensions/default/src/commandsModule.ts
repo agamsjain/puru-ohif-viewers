@@ -1,7 +1,14 @@
-import { Services } from '@ohif/core';
+import { DicomMetadataStore, ServicesManager } from '@ohif/core';
 
 import DicomTagBrowser from './DicomTagBrowser/DicomTagBrowser';
 import reuseCachedLayouts from './reuseCachedLayouts';
+
+export type HangingProtocolParams = {
+  protocolId?: string;
+  stageIndex?: number;
+  activeStudyUID?: string;
+  stageId?: string;
+};
 
 const commandsModule = ({ servicesManager, commandsManager }) => {
   const {
@@ -11,7 +18,7 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
     viewportGridService,
     displaySetService,
     stateSyncService,
-  } = servicesManager.services as Services;
+  } = (servicesManager as ServicesManager).services;
 
   const actions = {
     displayNotification: ({ text, title, type }) => {
@@ -43,45 +50,124 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
      *       a. HP Service is provided reuseIdMap
      *       b. HP Service will ignore any reuseId instances which don't apply
      *       c. HP Service will throw an exception if it isn't applicable
+     * @param options - contains information on the HP to apply
+     * @param options.activeStudyUID - the updated study to apply the HP to
+     * @param options.protocolId - the protocol ID to change to
+     * @param options.stageId - the stageId to apply
+     * @param options.stageIndex - the index of the stage to go to.
      */
-    setHangingProtocol: ({ protocolId, stageId, stageIndex }) => {
-      // Stores in the state the reuseID to displaySetUID mapping
-      // Pass in viewportId for the active viewport.  This item will get set as
-      // the activeViewportId
-      const state = viewportGridService.getState();
-      const { hpInfo } = state;
-      const { reuseIdMap, viewportGridStore } = reuseCachedLayouts(
-        state,
-        stateSyncService
-      );
-
-      const useStageIdx =
-        stageIndex ??
-        hangingProtocolService.getStageIndex(protocolId, {
-          stageId,
-          stageIndex,
-        });
-      const storedHanging = `${protocolId}:${useStageIdx || 0}`;
-
-      if (
-        protocolId === hpInfo.hangingProtocolId &&
-        useStageIdx === hpInfo.stageIdx
-      ) {
-        // Clear the HP setting to reset them
-        hangingProtocolService.setProtocol(protocolId, {
-          stageId,
-          stageIndex: useStageIdx,
-        });
-      } else if (viewportGridStore[storedHanging]) {
-        viewportGridService.restoreCachedLayout(
-          viewportGridStore[storedHanging]
+    setHangingProtocol: ({
+      activeStudyUID = '',
+      protocolId,
+      stageId,
+      stageIndex,
+    }: HangingProtocolParams): boolean => {
+      try {
+        // Stores in the state the reuseID to displaySetUID mapping
+        // Pass in viewportId for the active viewport.  This item will get set as
+        // the activeViewportId
+        const state = viewportGridService.getState();
+        const { hpInfo } = state;
+        const { reuseIdMap, viewportGridStore, hanging } = reuseCachedLayouts(
+          state,
+          stateSyncService
         );
-      } else {
-        hangingProtocolService.setProtocol(protocolId, {
-          reuseIdMap,
-          stageId,
-          stageIndex: useStageIdx,
+
+        if (!protocolId) {
+          // Re-use the previous protocol id, and optionally stage
+          protocolId = hpInfo.hangingProtocolId;
+          if (stageId === undefined && stageIndex === undefined) {
+            stageIndex = hpInfo.stageIndex;
+          }
+        } else if (stageIndex === undefined && stageId === undefined) {
+          // Re-set the same stage as was previously used
+          const hangingId = `${activeStudyUID ||
+            hpInfo.activeStudyUID}:${protocolId}`;
+          stageIndex = hanging[hangingId]?.stageIndex;
+        }
+
+        const useStageIdx =
+          stageIndex ??
+          hangingProtocolService.getStageIndex(protocolId, {
+            stageId,
+            stageIndex,
+          });
+
+        if (activeStudyUID) {
+          const activeStudy = DicomMetadataStore.getStudy(activeStudyUID);
+          activeStudy && hangingProtocolService.setActiveStudy(activeStudy);
+        }
+
+        const storedHanging = `${hangingProtocolService.getActiveProtocol().activeStudyUID
+        }:${protocolId}:${useStageIdx || 0}`;
+
+        const restoreProtocol = !!viewportGridStore[storedHanging];
+
+        if (
+          protocolId === hpInfo.hangingProtocolId &&
+          useStageIdx === hpInfo.stageIdx &&
+          !activeStudyUID
+        ) {
+          // Clear the HP setting to reset them
+          hangingProtocolService.setProtocol(protocolId, {
+            stageId,
+            stageIndex: useStageIdx,
+          });
+        } else {
+          console.log('Setting protocol', JSON.stringify(reuseIdMap));
+          hangingProtocolService.setProtocol(protocolId, {
+            reuseIdMap,
+            stageId,
+            stageIndex: useStageIdx,
+            restoreProtocol,
+          });
+          if (restoreProtocol) {
+            console.log('Restoring protocol', storedHanging);
+            viewportGridService.restoreCachedLayout(
+              viewportGridStore[storedHanging]
+            );
+          }
+        }
+        return true;
+      } catch (e) {
+        uiNotificationService.show({
+          title: 'Apply Hanging Protocol',
+          message: `The hanging protocol could not be applied due to ${e}`,
+          type: 'error',
+          duration: 3000,
         });
+        return false;
+      }
+    },
+
+    toggleHangingProtocol: ({
+      protocolId,
+      stageIndex,
+    }: HangingProtocolParams): boolean => {
+      const {
+        protocol,
+        stage,
+        activeStudyUID,
+      } = hangingProtocolService.getActiveProtocol();
+      const { toggleHangingProtocol } = stateSyncService.getState();
+      const storedHanging = `${activeStudyUID}:${protocolId}:${stageIndex | 0}`;
+      if (
+        protocol.id === protocolId &&
+        (stageIndex === undefined || stageIndex === stage)
+      ) {
+        // Toggling off - restore to previous state
+        const previousState = toggleHangingProtocol[storedHanging] || {
+          protocolId: 'default',
+        };
+        return actions.setHangingProtocol(previousState);
+      } else {
+        stateSyncService.reduce({
+          toggleHangingProtocol: {
+            ...toggleHangingProtocol,
+            [storedHanging]: { protocolId: protocol.id, stageIndex: stage },
+          },
+        });
+        return actions.setHangingProtocol({ protocolId, stageIndex });
       }
     },
 
@@ -89,16 +175,24 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
       const state = viewportGridService.getState();
       const { hangingProtocolId: protocolId, stageIdx } = state.hpInfo;
       const { protocol } = hangingProtocolService.getActiveProtocol();
-      const stageIndex = stageIdx + direction;
-      if (stageIndex >= 0 && stageIndex <= protocol.stages.length) {
-        actions.setHangingProtocol({ protocolId, stageIndex });
-      } else {
-        console.log(
-          'No stage available at',
-          stageIndex,
-          protocol.stages.length
-        );
+      for (
+        let stageIndex = stageIdx + direction;
+        stageIndex >= 0 && stageIndex < protocol.stages.length;
+        stageIndex += direction
+      ) {
+        if (protocol.stages[stageIndex].enable !== 'disabled') {
+          return actions.setHangingProtocol({
+            protocolId,
+            stageIndex,
+          });
+        }
       }
+      uiNotificationService.show({
+        title: 'Change Stage',
+        message: 'The hanging protocol has no more applicable stages',
+        type: 'error',
+        duration: 3000,
+      });
     },
 
     previousStage: () => {
@@ -197,6 +291,11 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
     },
     setHangingProtocol: {
       commandFn: actions.setHangingProtocol,
+      storeContexts: [],
+      options: {},
+    },
+    toggleHangingProtocol: {
+      commandFn: actions.toggleHangingProtocol,
       storeContexts: [],
       options: {},
     },
