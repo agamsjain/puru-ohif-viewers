@@ -525,12 +525,18 @@ class CornerstoneViewportService extends PubSubService
       !hangingProtocolService.customImageLoadPerformed
     ) {
       // delegate the volume loading to the hanging protocol service if it has a custom image load strategy
-      return hangingProtocolService.runImageLoadStrategy({
-        viewportId: viewport.id,
-        volumeInputArray,
-      });
+      if (
+        hangingProtocolService.runImageLoadStrategy({
+          viewportId: viewport.id,
+          volumeInputArray,
+        })
+      ) {
+        // Fallback to the default strategy if the custom one fails
+        return;
+      }
     }
 
+    console.log('Loading volumes normally');
     volumeToLoad.forEach(volume => {
       volume.load();
     });
@@ -550,6 +556,7 @@ class CornerstoneViewportService extends PubSubService
       toolGroupService,
     } = this.servicesManager.services;
 
+    console.log('Setting volumes', volumeInputArray);
     await viewport.setVolumes(volumeInputArray);
 
     // load any secondary displaySets

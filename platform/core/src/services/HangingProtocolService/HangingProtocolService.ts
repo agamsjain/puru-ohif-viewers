@@ -404,7 +404,7 @@ export default class HangingProtocolService extends PubSubService {
    * Executes the callback function for the custom loading strategy for the images
    * if no strategy is set, the default strategy is used
    */
-  runImageLoadStrategy(data): void {
+  runImageLoadStrategy(data): boolean {
     const loader = this.registeredImageLoadStrategies[
       this.activeImageLoadStrategyName
     ];
@@ -417,11 +417,13 @@ export default class HangingProtocolService extends PubSubService {
     // if loader successfully re-arranged the data with the custom strategy
     // and returned the new props, then broadcast them
     if (!loadedData) {
-      return;
+      console.warn('Not able to load data with custom strategy');
+      return false;
     }
 
     this.customImageLoadPerformed = true;
     this._broadcastChange(this.EVENTS.CUSTOM_IMAGE_LOAD_PERFORMED, loadedData);
+    return true;
   }
 
   _updateActiveStudyWith(list: [], propertyKey: string): void {
