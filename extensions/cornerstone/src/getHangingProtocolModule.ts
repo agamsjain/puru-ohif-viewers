@@ -63,7 +63,7 @@ const mpr: Types.HangingProtocol.Protocol = {
         {
           viewportOptions: {
             toolGroupId: 'mpr',
-            viewportType: 'orthographic',
+            viewportType: 'volume',
             orientation: 'axial',
             initialImageOptions: {
               preset: 'middle',

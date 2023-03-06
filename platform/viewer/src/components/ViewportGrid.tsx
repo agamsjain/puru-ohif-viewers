@@ -303,7 +303,8 @@ function ViewerViewportGrid(props) {
   const getViewportPanes = useCallback(() => {
     const viewportPanes = [];
 
-    for (let i = 0; i < viewports.length; i++) {
+    const numViewportPanes = viewportGridService.getNumViewportPanes();
+    for (let i = 0; i < numViewportPanes; i++) {
       const viewportIndex = i;
       const isActive = activeViewportIndex === viewportIndex;
       const paneMetadata = viewports[i] || {};

@@ -131,7 +131,6 @@ function modeFactory() {
         cornerstoneViewportService,
       } = servicesManager.services;
 
-      toolbarService.reset();
       toolGroupService.destroy();
       syncGroupService.destroy();
       segmentationService.destroy();

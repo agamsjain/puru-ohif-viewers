@@ -26,8 +26,6 @@ class ViewportGridService extends PubSubService {
     setActiveViewportIndex: setActiveViewportIndexImplementation,
     setDisplaySetsForViewport: setDisplaySetsForViewportImplementation,
     setDisplaySetsForViewports: setDisplaySetsForViewportsImplementation,
-    setCachedLayout: setCachedLayoutImplementation,
-    restoreCachedLayout: restoreCachedLayoutImplementation,
     setLayout: setLayoutImplementation,
     reset: resetImplementation,
     onModeExit: onModeExitImplementation,
@@ -51,12 +49,6 @@ class ViewportGridService extends PubSubService {
     }
     if (resetImplementation) {
       this.serviceImplementation._reset = resetImplementation;
-    }
-    if (setCachedLayoutImplementation) {
-      this.serviceImplementation._setCachedLayout = setCachedLayoutImplementation;
-    }
-    if (restoreCachedLayoutImplementation) {
-      this.serviceImplementation._restoreCachedLayout = restoreCachedLayoutImplementation;
     }
     if (onModeExitImplementation) {
       this.serviceImplementation._onModeExit = onModeExitImplementation;
@@ -123,12 +115,8 @@ class ViewportGridService extends PubSubService {
     this.serviceImplementation._onModeExit();
   }
 
-  public setCachedLayout(cacheId?: string): void {
-    this.serviceImplementation._setCachedLayout(cacheId);
-  }
-
-  public restoreCachedLayout(cacheId) {
-    this.serviceImplementation._restoreCachedLayout(cacheId);
+  public restoreCachedLayout(cached) {
+    this.serviceImplementation._set(cached);
   }
 
   public set(state) {

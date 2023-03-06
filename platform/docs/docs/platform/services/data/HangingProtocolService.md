@@ -27,6 +27,25 @@ registered automatically to the HangingProtocolService.
 
 All protocols are stored in the `HangingProtocolService` using their `id` as the key, and the protocol itself as the value.
 
+## Protocol Definition
+Protocols are defined in a getHangingProtocolModule inside an extension.  As such,
+they are defined with a structure that starts with an id, and has a protocol
+that is the actual protocol, for example, from `@ohif/extension-default`:
+
+```javascript
+export default function getHangingProtocolModule() {
+  return [
+    {
+      id: defaultProtocol.id,
+      protocol: defaultProtocol,
+    },
+  ];
+}
+```
+
+Within the protocol itself, the structure is layed out as described in the HangingProtocol.ts
+type definition, starting with `Protocol`.  See the type definition for more details.
+
 ## Events
 
 There are two events that get publish in `HangingProtocolService`:
@@ -34,10 +53,9 @@ There are two events that get publish in `HangingProtocolService`:
 | Event        | Description                                                          |
 | ------------ | -------------------------------------------------------------------- |
 | NEW_LAYOUT   | Fires when a new layout is requested by the `HangingProtocolService` |
-| STAGE_CHANGE | Fires when the the stage is changed in the hanging protocols         |
-| PROTOCOL_CHANGED | Fires when the the protocol is changed in the hanging protocols         |
-| HANGING_PROTOCOL_APPLIED_FOR_VIEWPORT | Fires when the hanging protocol applies for a viewport (sets its displaySets) |
-
+| PROTOCOL_CHANGED | Fires when the the protocol is changed in the hanging protocols, or when the applied stage is changed. |
+| RESTORE_PROTOCOL | Fires when the protocol is restored, for example, after returning to a view |
+| STAGE_ACTIVATION | Fires when the stages are known to have stage.enable set to enabled, disabled or passive (possible to show, but missing enough display sets, not shown by default unless that is the only match, or specifically navigated to.) |
 
 
 ## API
@@ -78,7 +96,7 @@ do not overlap, with the suggested id being `${moduleId}.${simpleName}`.  The
 'default' name is used as the hanging protocol id when no other protocol applies,
 and can be set as the last module listed containing 'default'.
 
-A hanging protocol can also be defined with a generator. 
+A hanging protocol can also be defined with a generator.
 A generator is a function we can write this way:
 
 ```ts

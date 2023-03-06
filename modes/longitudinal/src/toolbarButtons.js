@@ -27,18 +27,6 @@ function _createButton(type, id, icon, label, commands, tooltip, uiType) {
   };
 }
 
-function _createCommands(commandName, toolName, toolGroupIds) {
-  return toolGroupIds.map(toolGroupId => ({
-    /* It's a command that is being run when the button is clicked. */
-    commandName,
-    commandOptions: {
-      toolName,
-      toolGroupId,
-    },
-    context: 'CORNERSTONE',
-  }));
-}
-
 const _createActionButton = _createButton.bind(null, 'action');
 const _createToggleButton = _createButton.bind(null, 'toggle');
 const _createToolButton = _createButton.bind(null, 'tool');
@@ -328,12 +316,23 @@ const toolbarButtons = [
       type: 'tool',
       icon: 'tool-crosshair',
       label: 'Crosshairs',
+      // TODO - figure out what it takes here to deactivate crosshairs
+      volumeDeactivate: {
+        interactionType: 'tool',
+        commands: [
+          {
+            commandOptions: {
+              toolName: 'WindowLevel',
+            },
+            context: 'CORNERSTONE',
+          },
+        ],
+      },
       commands: [
         {
-          commandName: 'setToolActive',
           commandOptions: {
-            toolGroupId: 'mpr',
             toolName: 'Crosshairs',
+            toolGroupId: 'mpr',
           },
           context: 'CORNERSTONE',
         },

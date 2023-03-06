@@ -4,6 +4,7 @@ import ProtocolEngine from './ProtocolEngine';
 import StudyMetadata from '../../types/StudyMetadata';
 import IDisplaySet from '../DisplaySetService/IDisplaySet';
 import { HangingProtocol, CommandsManager, Services } from '../../types';
+import ServicesManager from '../ServicesManager';
 
 type Protocol = HangingProtocol.Protocol | HangingProtocol.ProtocolGenerator;
 
@@ -47,7 +48,7 @@ export default class HangingProtocolService extends PubSubService {
   protocol: HangingProtocol.Protocol;
   stage: number;
   _commandsManager: CommandsManager;
-  _servicesManager: Record<string, unknown>;
+  _servicesManager: ServicesManager;
   protocolEngine: ProtocolEngine;
   customViewportSettings = [];
   displaySets: IDisplaySet[] = [];
@@ -144,6 +145,20 @@ export default class HangingProtocolService extends PubSubService {
     return {
       protocol: this.protocol,
       stage: this.stage,
+      activeStudyUID: this.activeStudy?.StudyInstanceUID,
+    };
+  }
+
+  /** Gets the HP information, which is like the active protocol but
+   * only includes the ID's rather than the actual instances, for use in
+   * state storage.
+   */
+  public getHPInfo(): HangingProtocol.HPInfo {
+    if (!this.protocol) return;
+    return {
+      protocolId: this.protocol.id,
+      stageIndex: this.stage,
+      stageId: this.protocol.stages[this.stage].id,
       activeStudyUID: this.activeStudy?.StudyInstanceUID,
     };
   }
@@ -622,7 +637,7 @@ export default class HangingProtocolService extends PubSubService {
           displaySetOptions,
         } = viewport.displaySets.reduce(
           (acc, displaySet) => {
-            const { id, options } = displaySet;
+            const { id } = displaySet;
 
             let {
               displaySetInstanceUID: displaySetInstanceUIDToUse,
@@ -633,7 +648,7 @@ export default class HangingProtocolService extends PubSubService {
             }
 
             acc.displaySetInstanceUIDs.push(displaySetInstanceUIDToUse);
-            acc.displaySetOptions.push(options);
+            acc.displaySetOptions.push(displaySet);
 
             return acc;
           },
@@ -1032,7 +1047,7 @@ export default class HangingProtocolService extends PubSubService {
   protected findDeduplicatedMatchDetails(
     matchDetails: HangingProtocol.DisplaySetMatchDetails,
     offset: number,
-    options
+    options: HangingProtocol.SetProtocolOptions = {}
   ): HangingProtocol.DisplaySetMatchDetails {
     if (!matchDetails) return;
     if (offset === 0) return matchDetails;
@@ -1115,7 +1130,6 @@ export default class HangingProtocolService extends PubSubService {
       // Use the display set provided instead
       if (reuseDisplaySetUID) {
         if (displaySetOptions.validateReuseId) {
-          console.log('Validating reuseId', reuseDisplaySetUID, id);
           this.validateReuseId(viewportDisplaySet, id, reuseDisplaySetUID);
         }
         const displaySetInfo: HangingProtocol.DisplaySetInfo = {
@@ -1158,7 +1172,7 @@ export default class HangingProtocolService extends PubSubService {
     protocolViewport: HangingProtocol.Viewport,
     displaySetSelectors: Record<string, HangingProtocol.DisplaySetSelector>
   ): void {
-    const { DisplaySetService } = this._servicesManager.services;
+    const { displaySetService } = this._servicesManager.services;
     const protocolViewportDisplaySets = protocolViewport.displaySets;
     const numDisplaySetsToSet =
       displaySetAndViewportOptions.displaySetInstanceUIDs.length;
@@ -1174,7 +1188,7 @@ export default class HangingProtocolService extends PubSubService {
 
     displaySetAndViewportOptions.displaySetInstanceUIDs.forEach(
       displaySetInstanceUID => {
-        const displaySet = DisplaySetService.getDisplaySetByUID(
+        const displaySet = displaySetService.getDisplaySetByUID(
           displaySetInstanceUID
         );
 
@@ -1212,11 +1226,11 @@ export default class HangingProtocolService extends PubSubService {
   }
 
   _validateOptions(options: HangingProtocol.SetProtocolOptions): void {
-    const { DisplaySetService } = this._servicesManager.services as Services;
+    const { displaySetService } = this._servicesManager.services;
     const { reuseIdMap } = options;
     if (reuseIdMap) {
       Object.entries(reuseIdMap).forEach(([key, displaySetInstanceUID]) => {
-        const displaySet = DisplaySetService.getDisplaySetByUID(
+        const displaySet = displaySetService.getDisplaySetByUID(
           displaySetInstanceUID
         );
 
@@ -1271,15 +1285,14 @@ export default class HangingProtocolService extends PubSubService {
         'study',
         study.StudyInstanceUID,
         'display sets #',
-        this.displaySets.length
+        studyDisplaySets.length
       );
-      this.displaySets.forEach(displaySet => {
+      studyDisplaySets.forEach(displaySet => {
         const {
           StudyInstanceUID,
           SeriesInstanceUID,
           displaySetInstanceUID,
         } = displaySet;
-        if (StudyInstanceUID !== study.StudyInstanceUID) return;
         const seriesMatchDetails = this.protocolEngine.findMatch(
           displaySet,
           seriesMatchingRules,

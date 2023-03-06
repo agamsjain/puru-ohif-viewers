@@ -12,6 +12,25 @@ const defaultProtocol = {
   editableBy: {},
   protocolMatchingRules: [],
   toolGroupIds: ['default'],
+  // -1 would be used to indicate active only, whereas other values are
+  // the number of required priors referenced - so 0 means active with
+  // 0 or more priors.
+  numberOfPriorsReferenced: 0,
+  // Default viewport is used to define the viewport when
+  // additional viewports are added using the layout tool
+  defaultViewport: {
+    viewportOptions: {
+      viewportType: 'stack',
+      toolGroupId: 'default',
+      allowUnmatchedView: true,
+    },
+    displaySets: [
+      {
+        id: 'defaultDisplaySetId',
+        displaySetIndex: -1,
+      },
+    ],
+  },
   displaySetSelectors: {
     defaultDisplaySetId: {
       // Unused currently
@@ -27,12 +46,12 @@ const defaultProtocol = {
           },
         },
       ],
-      studyMatchingRules: [],
+      // Can be used to select matching studies
+      // studyMatchingRules: [],
     },
   },
   stages: [
     {
-      id: 'hYbmMy3b7pz7GLiaT',
       name: 'default',
       viewportStructure: {
         layoutType: 'grid',
@@ -53,8 +72,60 @@ const defaultProtocol = {
           displaySets: [
             {
               id: 'defaultDisplaySetId',
-              // Sets the active display set
-              reuseId: 'activeDisplaySet',
+              reuseId: 'position-0,0',
+            },
+          ],
+        },
+      ],
+      createdDate: '2021-02-23T18:32:42.850Z',
+    },
+
+    // This is an example of a layout with more than one element in it
+    // It can be navigated to using Ctrl+End
+    {
+      name: '1x2',
+      // Indicate that the number of viewports needed is 1 filled viewport,
+      // but that 2 viewports are preferred.
+      requiredViewports: 1,
+      preferredViewports: 2,
+
+      viewportStructure: {
+        layoutType: 'grid',
+        properties: {
+          rows: 1,
+          columns: 2,
+        },
+      },
+      viewports: [
+        {
+          viewportOptions: {
+            toolGroupId: 'default',
+            // initialImageOptions: {
+            //   index: 180,
+            //   preset: 'middle', // 'first', 'last', 'middle'
+            // },
+          },
+          displaySets: [
+            {
+              id: 'defaultDisplaySetId',
+              reuseId: 'position-0,0',
+            },
+          ],
+        },
+        {
+          viewportOptions: {
+            toolGroupId: 'default',
+            // initialImageOptions: {
+            //   index: 180,
+            //   preset: 'middle', // 'first', 'last', 'middle'
+            // },
+          },
+          displaySets: [
+            {
+              id: 'defaultDisplaySetId',
+              // Shows the second index of this image set
+              displaySetIndex: 1,
+              reuseId: 'position-1,0',
             },
           ],
         },
@@ -62,7 +133,6 @@ const defaultProtocol = {
       createdDate: '2021-02-23T18:32:42.850Z',
     },
   ],
-  numberOfPriorsReferenced: -1,
 };
 
 function getHangingProtocolModule() {

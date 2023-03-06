@@ -64,6 +64,7 @@ const ThumbnailList = ({
                   description={description}
                   seriesNumber={seriesNumber}
                   numInstances={numInstances}
+                  countIcon={countIcon}
                   imageSrc={imageSrc}
                   imageAltText={imageAltText}
                   viewportIdentificator={viewportIdentificator}

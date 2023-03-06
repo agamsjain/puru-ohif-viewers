@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import {
-  LayoutSelector as OHIFLayoutSelector,
-  ToolbarButton,
-  useViewportGrid,
-} from '@ohif/ui';
+import { LayoutSelector as OHIFLayoutSelector, ToolbarButton } from '@ohif/ui';
 
 import { ServicesManager } from '@ohif/core';
 
@@ -16,8 +12,6 @@ function LayoutSelector({
   ...rest
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [disableSelector, setDisableSelector] = useState(false);
-  const [viewportGridState, viewportGridService] = useViewportGrid();
 
   const {
     hangingProtocolService,
@@ -58,7 +52,7 @@ function LayoutSelector({
       interactionType: 'action',
       commands: [
         {
-          commandName: 'setViewportLayout',
+          commandName: 'setViewportGridLayout',
           commandOptions: { ...props },
           context: 'DEFAULT',
         },
@@ -83,7 +77,7 @@ function LayoutSelector({
           />
         )
       }
-      isActive={disableSelector ? false : isOpen}
+      isActive={isOpen}
       type="toggle"
     />
   );

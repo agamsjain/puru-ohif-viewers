@@ -1,7 +1,10 @@
 import { DicomMetadataStore, ServicesManager } from '@ohif/core';
 
 import DicomTagBrowser from './DicomTagBrowser/DicomTagBrowser';
-import reuseCachedLayouts from './reuseCachedLayouts';
+import reuseCachedLayouts from './utils/reuseCachedLayouts';
+import findViewportsByPosition, {
+  findOrCreateViewport as layoutFindOrCreate,
+} from './findViewportsByPosition';
 
 export type HangingProtocolParams = {
   protocolId?: string;
@@ -18,6 +21,7 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
     viewportGridService,
     displaySetService,
     stateSyncService,
+    toolbarService,
   } = (servicesManager as ServicesManager).services;
 
   const actions = {
@@ -30,6 +34,44 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
     },
     clearMeasurements: () => {
       measurementService.clear();
+    },
+
+    /** Toggles off all tools which contain a HP setter and don't match
+     * the HP id/stageId/index, as well as all tools mark as isVolume, which
+     * when isVolume is false.
+     */
+    toggleHpTools: ({ isVolume = false, protocol, stage }) => {
+      const active = toolbarService.getActiveTools();
+      const enableListener = button => {
+        if (!button.id) return;
+        const { commands, items, volumeDeactivate } = button.props || button;
+        if (volumeDeactivate && !isVolume) {
+          if (active.indexOf(button.id) !== -1) {
+            toolbarService.recordInteraction(volumeDeactivate);
+          }
+        }
+        if (items) {
+          items.forEach(enableListener);
+        }
+        const hpCommand = commands?.find?.(
+          it => it?.commandName && it.commandName.indexOf('Hanging') != -1
+        );
+        if (hpCommand) {
+          const { protocolId, stageIndex, stageId } = hpCommand.commandOptions;
+          let isActive = true;
+          if (protocolId !== undefined && protocolId !== protocol.id) {
+            isActive = false;
+          }
+          if (stageIndex !== undefined && stageIndex !== stage) {
+            isActive = false;
+          }
+          if (stageId && stageId !== protocol.stages[stage].id) {
+            isActive = false;
+          }
+          toolbarService.setActive(button.id, isActive);
+        }
+      };
+      Object.values(toolbarService.getButtons()).forEach(enableListener);
     },
 
     /**
@@ -67,13 +109,17 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
         // Pass in viewportId for the active viewport.  This item will get set as
         // the activeViewportId
         const state = viewportGridService.getState();
-        const { hpInfo } = state;
-        const stateSyncReduce = reuseCachedLayouts(state, stateSyncService);
+        const hpInfo = hangingProtocolService.getHPInfo();
+        const stateSyncReduce = reuseCachedLayouts(
+          state,
+          hangingProtocolService,
+          stateSyncService
+        );
         const { hanging, viewportGridStore, reuseIdMap } = stateSyncReduce;
 
         if (!protocolId) {
           // Re-use the previous protocol id, and optionally stage
-          protocolId = hpInfo.hangingProtocolId;
+          protocolId = hpInfo.protocolId;
           if (stageId === undefined && stageIndex === undefined) {
             stageIndex = hpInfo.stageIndex;
           }
@@ -112,7 +158,6 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
             stageIndex: useStageIdx,
           });
         } else {
-          console.log('Setting protocol', JSON.stringify(reuseIdMap));
           hangingProtocolService.setProtocol(protocolId, {
             reuseIdMap,
             stageId,
@@ -120,7 +165,6 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
             restoreProtocol,
           });
           if (restoreProtocol) {
-            console.log('Restoring protocol', storedHanging);
             viewportGridService.restoreCachedLayout(
               viewportGridStore[storedHanging]
             );
@@ -128,8 +172,10 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
         }
         // Do this after successfully applying the update
         stateSyncService.reduce(stateSyncReduce);
+        actions.toggleHpTools(hangingProtocolService.getActiveProtocol());
         return true;
       } catch (e) {
+        actions.toggleHpTools(hangingProtocolService.getActiveProtocol());
         uiNotificationService.show({
           title: 'Apply Hanging Protocol',
           message: `The hanging protocol could not be applied due to ${e}`,
@@ -172,11 +218,13 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
     },
 
     deltaStage: ({ direction }) => {
-      const state = viewportGridService.getState();
-      const { hangingProtocolId: protocolId, stageIdx } = state.hpInfo;
+      const {
+        protocolId,
+        stageIndex: oldStageIndex,
+      } = hangingProtocolService.getHPInfo();
       const { protocol } = hangingProtocolService.getActiveProtocol();
       for (
-        let stageIndex = stageIdx + direction;
+        let stageIndex = oldStageIndex + direction;
         stageIndex >= 0 && stageIndex < protocol.stages.length;
         stageIndex += direction
       ) {
@@ -195,66 +243,28 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
       });
     },
 
-    previousStage: () => {
-      const state = viewportGridService.getState();
-      const { reuseIdMap } = reuseCachedLayouts(state, stateSyncService);
-      // next stage in hanging protocols
-      hangingProtocolService.previousProtocolStage({ reuseIdMap });
-    },
-
     /**
-     * Changes the viewport layout in terms of the MxN layout.
+     * Changes the viewport grid layout in terms of the MxN layout.
      */
-    setViewportLayout: ({ numRows, numCols }) => {
+    setViewportGridLayout: ({ numRows, numCols }) => {
       const state = viewportGridService.getState();
-      const { hangingProtocolId, stageIdx } = state.hpInfo;
+      const stateReduce = findViewportsByPosition(
+        state,
+        { numRows, numCols },
+        stateSyncService
+      );
+      const findOrCreateViewport = layoutFindOrCreate.bind(
+        null,
+        hangingProtocolService,
+        stateReduce.viewportsByPosition
+      );
 
-      const initialInDisplay = [];
-      state.viewports.forEach(vp => {
-        if (vp.displaySetInstanceUIDs) {
-          initialInDisplay.push(...vp.displaySetInstanceUIDs);
-        }
+      viewportGridService.setLayout({
+        numRows,
+        numCols,
+        findOrCreateViewport,
       });
-
-      // The find or create viewport fills in missing viewports by first
-      // looking for previously used viewports, by position, and secondly
-      // by asking the hanging protocol service to provide a viewport.
-      const findOrCreateViewport = (
-        viewportIdx,
-        positionId,
-        cached,
-        options
-      ) => {
-        const byPositionViewport = cached.byPosition?.[positionId];
-        if (byPositionViewport) return { ...byPositionViewport };
-        const missing = hangingProtocolService.getMissingViewport(
-          hangingProtocolId,
-          stageIdx,
-          positionId,
-          options
-        );
-        if (missing) {
-          if (!options.inDisplay) {
-            options.inDisplay = [...initialInDisplay];
-          }
-          const displaySetInstanceUIDs = missing.displaySetsInfo.map(
-            it => it.displaySetInstanceUID
-          );
-          options.inDisplay.push(...displaySetInstanceUIDs);
-          return {
-            displaySetInstanceUIDs,
-            displaySetOptions: missing.displaySetsInfo.map(
-              it => it.displaySetOptions
-            ),
-            viewportOptions: {
-              ...missing.viewportOptions,
-            },
-          };
-        }
-        return {};
-      };
-
-      viewportGridService.setLayout({ numRows, numCols, findOrCreateViewport });
+      stateSyncService.reduce(stateReduce);
     },
 
     openDICOMTagViewer() {
@@ -309,8 +319,8 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
       storeContexts: [],
       options: { direction: -1 },
     },
-    setViewportLayout: {
-      commandFn: actions.setViewportLayout,
+    setViewportGridLayout: {
+      commandFn: actions.setViewportGridLayout,
       storeContexts: [],
       options: {},
     },

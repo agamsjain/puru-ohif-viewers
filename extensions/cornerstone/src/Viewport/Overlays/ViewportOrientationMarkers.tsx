@@ -119,7 +119,7 @@ function ViewportOrientationMarkers({
     );
 
     if (!ohifViewport) {
-      console.log('No viewport');
+      console.log('ViewportOrientationMarkers::No viewport');
       return null;
     }
     const backgroundColor = ohifViewport.getViewportOptions().background;

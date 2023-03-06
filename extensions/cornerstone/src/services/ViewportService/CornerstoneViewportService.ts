@@ -192,9 +192,9 @@ class CornerstoneViewportService extends PubSubService
       const initialImageIndex = csViewport.getCurrentImageIdIndex();
       return {
         id,
-        viewportType: viewportType === 'volume3d' ? 'volume' : 'stack',
-        pan,
-        zoom,
+        viewportType: 'stack',
+        pan: isNaN(pan[0]) || isNaN(pan[1]) ? undefined : pan,
+        zoom: isNaN(zoom) ? undefined : zoom,
         properties,
         initialImageIndex,
       };
@@ -216,10 +216,10 @@ class CornerstoneViewportService extends PubSubService
     const viewport = this.getCornerstoneViewportByIndex(viewportIdx);
     if (presentation.viewportType === 'stack') {
       const { zoom, pan, properties } = presentation;
-      if (zoom && !isNaN(zoom)) {
+      if (zoom) {
         viewport.setZoom(zoom);
       }
-      // if (presentation.pan) viewport.setPan(presentation.pan);
+      if (presentation.pan) viewport.setPan(presentation.pan);
       if (properties) {
         viewport.setProperties(properties);
       }
@@ -494,7 +494,7 @@ class CornerstoneViewportService extends PubSubService
       displaySetInstanceUIDs.push(displaySetInstanceUID);
 
       if (!volume) {
-        console.log('Not adding volume');
+        console.log('Volume display set not found');
         continue;
       }
 

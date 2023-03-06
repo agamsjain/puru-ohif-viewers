@@ -12,15 +12,6 @@ import getPresentationId from './getPresentationId';
 
 const DEFAULT_STATE = {
   activeViewportIndex: 0,
-  cachedLayout: {
-    // byPosition is a map of position to viewport info
-    byPosition: {},
-  },
-  hpInfo: {
-    hangingProtocolId: '',
-    stageId: '',
-    stageIdx: 0,
-  },
   layout: {
     numRows: 0,
     numCols: 0,
@@ -42,10 +33,6 @@ const DEFAULT_STATE = {
 };
 
 export const ViewportGridContext = createContext(DEFAULT_STATE);
-
-const findOrCreate = (index, positionId, cached) => ({
-  ...(cached.byPosition?.[positionId] || {}),
-});
 
 /**
  * Find a viewport to re-use, and then set the viewportId
@@ -129,11 +116,11 @@ export function ViewportGridProvider({ children, service }) {
 
         const viewports = state.viewports.slice();
 
-        let newView = {
+        const newView = {
           ...viewport,
           displaySetInstanceUIDs,
-          viewportOptions: viewportOptions,
-          displaySetOptions: displaySetOptions,
+          viewportOptions,
+          displaySetOptions,
           viewportLabel: viewportLabels[viewportIndex],
         };
         viewportOptions.presentationId = getPresentationId(newView, viewports);
@@ -155,7 +142,6 @@ export function ViewportGridProvider({ children, service }) {
           numCols,
           numRows,
           layoutOptions,
-          hpInfo,
           layoutType = 'grid',
           findOrCreateViewport,
         } = action.payload;
@@ -163,26 +149,10 @@ export function ViewportGridProvider({ children, service }) {
         // If empty viewportOptions, we use numRow and numCols to calculate number of viewports
         const hasOptions = layoutOptions?.length;
         const viewports = [];
-        const byPosition = { ...(state.cachedLayout.byPosition || {}) };
-        const cachedLayout = { ...state.cachedLayout, byPosition };
 
         // Options is a cache of values allowing for findOrCreate to store
         // information on progress, reset on every state update
         const options = {};
-
-        for (const viewport of state.viewports) {
-          if (viewport.positionId) {
-            const storedViewport = {
-              ...viewport,
-              viewportOptions: { ...viewport.viewportOptions },
-            };
-            byPosition[viewport.positionId] = storedViewport;
-            // The cache doesn't store the viewport options - it is only useful
-            // for remembering the type of viewport and UIDs
-            delete storedViewport.viewportId;
-            delete storedViewport.viewportOptions.viewportId;
-          }
-        }
 
         let activeViewportIndex;
         for (let row = 0; row < numRows; row++) {
@@ -197,12 +167,7 @@ export function ViewportGridProvider({ children, service }) {
               ) {
                 activeViewportIndex = pos;
               }
-              const viewport = findOrCreateViewport(
-                pos,
-                positionId,
-                cachedLayout,
-                options
-              );
+              const viewport = findOrCreateViewport(pos, positionId, options);
               if (!viewport) continue;
               viewport.positionId = positionId;
               // Create a new viewport object as it is getting updated here
@@ -260,28 +225,12 @@ export function ViewportGridProvider({ children, service }) {
             numRows,
             layoutType,
           },
-          hpInfo: hpInfo || { ...state.hpInfo, custom: true },
           viewports,
-          cachedLayout,
         };
         return ret;
       }
       case 'RESET': {
         return DEFAULT_STATE;
-      }
-
-      // Restore a previously cached layout.
-      case 'RESTORE_CACHED_LAYOUT': {
-        const restoreState = action.payload;
-
-        if (!restoreState) {
-          console.warn(
-            `No cached layout found for cacheId: ${cacheId}. Ignoring...`
-          );
-          return state;
-        }
-
-        return { ...state, ...restoreState };
       }
 
       case 'SET': {
@@ -345,9 +294,8 @@ export function ViewportGridProvider({ children, service }) {
       layoutType,
       numRows,
       numCols,
-      hpInfo,
       layoutOptions = [],
-      findOrCreateViewport = findOrCreate,
+      findOrCreateViewport,
     }) =>
       dispatch({
         type: 'SET_LAYOUT',
@@ -355,7 +303,6 @@ export function ViewportGridProvider({ children, service }) {
           layoutType,
           numRows,
           numCols,
-          hpInfo,
           layoutOptions,
           findOrCreateViewport,
         },
@@ -372,25 +319,6 @@ export function ViewportGridProvider({ children, service }) {
     [dispatch]
   );
 
-  const setCachedLayout = useCallback(
-    payload =>
-      dispatch({
-        type: 'SET_CACHED_LAYOUT',
-        payload,
-      }),
-    [dispatch]
-  );
-
-  const restoreCachedLayout = useCallback(
-    cacheId => {
-      dispatch({
-        type: 'RESTORE_CACHED_LAYOUT',
-        payload: cacheId,
-      });
-    },
-    [dispatch]
-  );
-
   const set = useCallback(
     payload =>
       dispatch({
@@ -401,7 +329,8 @@ export function ViewportGridProvider({ children, service }) {
   );
 
   const getNumViewportPanes = useCallback(() => {
-    const { numCols, numRows, viewports } = viewportGridState;
+    const { layout, viewports } = viewportGridState;
+    const { numRows, numCols } = layout;
     return Math.min(viewports.length, numCols * numRows);
   }, [viewportGridState]);
 
@@ -420,8 +349,6 @@ export function ViewportGridProvider({ children, service }) {
         setLayout,
         reset,
         onModeExit: reset,
-        setCachedLayout,
-        restoreCachedLayout,
         set,
         getNumViewportPanes,
       });
@@ -434,8 +361,6 @@ export function ViewportGridProvider({ children, service }) {
     setDisplaySetsForViewports,
     setLayout,
     reset,
-    setCachedLayout,
-    restoreCachedLayout,
     set,
     getNumViewportPanes,
   ]);
@@ -446,8 +371,6 @@ export function ViewportGridProvider({ children, service }) {
     setDisplaySetsForViewport,
     setDisplaySetsForViewports,
     setLayout,
-    setCachedLayout,
-    restoreCachedLayout,
     reset,
     set,
     getNumViewportPanes,
