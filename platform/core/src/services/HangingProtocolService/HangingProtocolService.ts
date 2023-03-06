@@ -735,9 +735,9 @@ export default class HangingProtocolService extends PubSubService {
       }
 
       const { displaySetSelectors } = this.protocol;
-      const { requiredDs = [] } = stage;
+      const { requiredDisplaySets = [] } = stage;
       stage.status = 'enabled';
-      for (const dsName of requiredDs) {
+      for (const dsName of requiredDisplaySets) {
         const displaySetSelector = displaySetSelectors[dsName];
         if (!displaySetSelector) {
           console.warn('No display set selector for', dsName);
@@ -747,7 +747,11 @@ export default class HangingProtocolService extends PubSubService {
         const { bestMatch } = this._matchImages(displaySetSelector);
         if (!bestMatch) {
           stage.status = 'disabled';
-          console.log('requiredDs failed to match', dsName, stage.name);
+          console.log(
+            'requiredDisplaySets failed to match',
+            dsName,
+            stage.name
+          );
           break;
         }
       }
@@ -1053,13 +1057,15 @@ export default class HangingProtocolService extends PubSubService {
   protected validateReuseId(
     match: HangingProtocol.DisplaySetMatchDetails,
     id: string,
-    dsUID: string
+    displaySetUID: string
   ): void {
-    if (match.displaySetInstanceUID === dsUID) return;
+    if (match.displaySetInstanceUID === displaySetUID) return;
     for (const subMatch of match.matchingScores) {
-      if (subMatch.displaySetInstanceUID === dsUID) return;
+      if (subMatch.displaySetInstanceUID === displaySetUID) return;
     }
-    throw new Error(`Reused viewport details ${id} with ds ${dsUID} not valid`);
+    throw new Error(
+      `Reused viewport details ${id} with ds ${displaySetUID} not valid`
+    );
   }
 
   protected _matchViewport(

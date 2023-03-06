@@ -173,8 +173,8 @@ class CornerstoneViewportService extends PubSubService
     this.viewportsById.delete(viewportId);
   }
 
-  public getPresentation(viewportIdx: number): Presentation {
-    const viewportInfo = this.viewportsInfo.get(viewportIdx);
+  public getPresentation(viewportIndex: number): Presentation {
+    const viewportInfo = this.viewportsInfo.get(viewportIndex);
     if (!viewportInfo) return;
     const {
       presentationId: id,
@@ -182,7 +182,7 @@ class CornerstoneViewportService extends PubSubService
     } = viewportInfo.getViewportOptions();
     if (!id) return;
 
-    const csViewport = this.getCornerstoneViewportByIndex(viewportIdx);
+    const csViewport = this.getCornerstoneViewportByIndex(viewportIndex);
     if (!csViewport) return;
 
     if (viewportType === 'stack' || !viewportType) {

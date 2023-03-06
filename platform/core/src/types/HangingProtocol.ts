@@ -24,9 +24,12 @@ export type DisplaySetAndViewportOptions = {
 
 export type SetProtocolOptions = {
   /** Used to provide a mapping of what keys are provided for which viewport.
-   * For example, a Chest XRay might use reuseId "ChestXRay", so that the
-   * given display set can be repositioned by name, even if an alternate
-   * ChestXRay was chosen.
+   * For example, a Chest XRay might use reuseId "ChestXRay", then
+   * the user might drag an alternate chest xray from the initially chosen one,
+   * and then navigate to another stage or protocol.  If that new stage/protocol
+   * uses the name "ChestXRay", then that selection will be used instead of
+   * matching the display set selectors.  That allows remembering the
+   * user selected views by name.
    */
   reuseIdMap?: Record<string, string>;
 
@@ -152,15 +155,20 @@ export type DisplaySetOptions = {
   /**  A key to select a display set UID to reuse from the existing sets.
    * If the protocol is run/set with a set of reuseId options in it, then
    * rather than matching the display set rules, the value will be chosen
-   * from the map of reuseIds.  This allows preserving items either by
-   * position or other keys such as the type of instance.
+   * from the map of reuseIds.
+   * For example, suppose the reuseId for a mammo study is "LCC", and the
+   * study has three different LCC display sets, then the user can navigate
+   * the display set to an alternate LCC and preserve that choice in other
+   * stages by re-using the reuseId of `LCC`.  Otherwise, the user needs to
+   * manually re-select the alternate item.
    */
   reuseId?: string;
+
   /** A key to indicate that the display set specified by the reuseId must
-   * be validated according to the display set rules.  This can be used to
-   * enforce required viewport conditions such as isVolume, for hanging
-   * protocols which are typically applied to an existing set of matches such
-   * as the MPR viewport.
+   * be validated according to the display set rules.
+   * For example, suppose the user is viewing a non-volume display set,
+   * and they click on the MPR button, then the MPR hanging protocol will require
+   * validation and will choose not to display because it can't.
    */
   validateReuseId?: boolean;
 
@@ -176,9 +184,9 @@ export type Viewport = {
 
 /**
  * disabled stages are missing display sets required in order to view them.
- * enabled stages have all the requiredDs and at least preferredViewports
+ * enabled stages have all the requiredDisplaySets and at least preferredViewports
  * filled.
- * passive stages have the requiredDs and at least requiredViewports filled.
+ * passive stages have the requiredDisplaySets and at least requiredViewports filled.
  */
 export type StageStatus = 'disabled' | 'enabled' | 'passive';
 
@@ -200,23 +208,38 @@ export type ProtocolStage = {
   viewports: Viewport[];
   /** Indicate if the stage can be applied or not */
   status?: StageStatus;
+
   /** The number of viewports that must have matching display sets to
-   * display differentiate between 'disabled' and other states. */
+   * display differentiate between 'disabled' and other states.
+   * For example, if requiredViewports is 2, but only 1 viewport has
+   * a display set, then the stage will be marked status `disabled`
+   */
   requiredViewports?: number;
+
   /** The number of viewports required to be matched to differentiate between
    * 'enable' and 'passive' states.
+   * For example, if the preferred viewports is 3, then if there are 2 or
+   * fewer viewports, the status will be marked as `passive`.
+   * If there are 3 or 4 viewports filled, then the status will be 'enabled'
    */
   preferredViewports?: number;
-  /** A display set selector can be chosen that is required to view this
-   * stage.  This can be used to disable display sets when they are mising,
-   * for example, to apply views only to Males or only Females by choose
-   * a display set selector that selects based on sex.
+
+  /**
+   * A list of display set selectors which have at least 1 match in order
+   * to permit this stage to not be disabled.  For example, if there
+   * is a display set selector that matches `PatientSex=M` in this list, then
+   * the stage would only apply to males, and would be marked 'disabled'
+   * for females or other.
    */
-  requiredDs?: string[];
-  /** A viewport definition used for changing the layout manually.  Used as the
-   * basic definition for new viewports.
+  requiredDisplaySets?: string[];
+
+  /** A viewport definition used for to fill in manually selected viewports.
+   * This allows changing the layout definition for additional viewports without
+   * needing to define layouts for each of the 1x1, 2x2 etc modes.
    */
   defaultViewport?: Viewport;
+
+  // Unused.
   createdDate?: string;
 };
 

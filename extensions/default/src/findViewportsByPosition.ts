@@ -9,7 +9,7 @@ import { StateSyncService, Types } from '@ohif/core';
 export const findOrCreateViewport = (
   hangingProtocolService,
   viewportsByPosition,
-  viewportIdx,
+  viewportIndex,
   positionId,
   options
 ) => {
