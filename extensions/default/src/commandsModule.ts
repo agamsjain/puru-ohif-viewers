@@ -50,6 +50,9 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
       const enableListener = button => {
         if (!button.id) return;
         const { commands, items, volumeDeactivate } = button.props || button;
+        // TODO: Remove this hack to allow deactivating buttons once the
+        // toolbar service supports viewing different button sets based on
+        // the hanging protocol, and/or the viewport group.
         if (volumeDeactivate && !isVolume) {
           if (active.indexOf(button.id) !== -1) {
             toolbarService.recordInteraction(volumeDeactivate);

@@ -316,7 +316,9 @@ const toolbarButtons = [
       type: 'tool',
       icon: 'tool-crosshair',
       label: 'Crosshairs',
-      // TODO - figure out what it takes here to deactivate crosshairs
+      // TODO - replace this with actually setting the toolbar group
+      // properly to allow for defining the buttons differently based on the
+      // HangingProtocol applied
       volumeDeactivate: {
         interactionType: 'tool',
         commands: [
