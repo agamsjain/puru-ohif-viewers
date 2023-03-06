@@ -1,5 +1,6 @@
 /** Store presentation data for either stack viewports or volume viewports */
 import { vec2 } from 'gl-matrix';
+import { Types } from '@cornerstonejs/core';
 
 export interface BasePresentation {
   id: string;
@@ -15,7 +16,7 @@ export interface StackPresentation extends BasePresentation {
 
 export interface VolumePresentation extends BasePresentation {
   viewportType: 'volume';
-  camera: Record<string, unknown>;
+  camera: Types.ICamera;
 }
 
 export type Presentation = StackPresentation | VolumePresentation;

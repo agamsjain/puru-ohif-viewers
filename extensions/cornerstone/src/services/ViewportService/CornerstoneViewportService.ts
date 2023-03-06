@@ -208,28 +208,6 @@ class CornerstoneViewportService extends PubSubService
     };
   }
 
-  public setPresentation(
-    viewportIdx: number,
-    presentation: Presentation
-  ): void {
-    if (!presentation) return;
-    const viewport = this.getCornerstoneViewportByIndex(viewportIdx);
-    if (presentation.viewportType === 'stack') {
-      const { zoom, pan, properties } = presentation;
-      if (zoom) {
-        viewport.setZoom(zoom);
-      }
-      if (presentation.pan) viewport.setPan(presentation.pan);
-      if (properties) {
-        viewport.setProperties(properties);
-      }
-    } else {
-      console.log('TODO - implement the rest of volume viewport restoration');
-      if (presentation.camera)
-        viewport.setCamera(presentation.camera as Types.ICamera);
-    }
-  }
-
   /**
    * Uses the renderingEngine to enable the element for the given viewport index
    * and sets the displaySet data to the viewport
@@ -408,11 +386,15 @@ class CornerstoneViewportService extends PubSubService
       }
     }
 
-    viewport.setStack(imageIds, initialImageIndexToUse).then(() => {
+    // There is a bug in CS3D that the setStack does not
+    // navigate to the desired image.
+    viewport.setStack(imageIds, 0).then(() => {
+      // The scroll, however, works fine in CS3D
+      viewport.scroll(initialImageIndexToUse);
       viewport.setProperties(properties);
       const { zoom, pan } = presentation || {};
-      if (zoom && !isNaN(zoom)) viewport.setZoom(zoom);
-      if (pan && !isNaN(pan[0]) && !isNaN(pan[1])) viewport.setPan(pan);
+      if (zoom) viewport.setZoom(zoom);
+      if (pan) viewport.setPan(pan);
     });
   }
 
@@ -536,20 +518,15 @@ class CornerstoneViewportService extends PubSubService
       }
     }
 
-    console.log('Loading volumes normally');
     volumeToLoad.forEach(volume => {
       volume.load();
     });
 
-    if (presentation) {
-      console.log('TODO - apply volume presentation', presentation);
-    }
-
     // This returns the async continuation only
-    return this.setVolumesForViewport(viewport, volumeInputArray);
+    return this.setVolumesForViewport(viewport, volumeInputArray, presentation);
   }
 
-  public async setVolumesForViewport(viewport, volumeInputArray) {
+  public async setVolumesForViewport(viewport, volumeInputArray, presentation) {
     const {
       displaySetService,
       segmentationService,
@@ -557,6 +534,9 @@ class CornerstoneViewportService extends PubSubService
     } = this.servicesManager.services;
 
     await viewport.setVolumes(volumeInputArray);
+    const { properties, camera } = presentation || {};
+    if (properties) viewport.setProperties(properties);
+    if (camera) viewport.setCamera(camera);
 
     // load any secondary displaySets
     const displaySetInstanceUIDs = this.viewportsDisplaySets.get(viewport.id);
