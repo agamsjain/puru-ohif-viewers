@@ -55,7 +55,6 @@ export default class StateSyncService extends PubSubService {
   }
 
   public onModeExit(): void {
-    console.log('************** onModeExit stateSyncService');
     const toReduce = {};
     for (const [key, value] of Object.entries(this.registeredStateSets)) {
       if (value.isMode) {

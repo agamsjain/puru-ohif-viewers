@@ -16,7 +16,7 @@ const reuseCachedLayout = (
   syncService: StateSyncService
 ): Record<string, Record<string, unknown>> => {
   const { activeViewportIndex, viewports, layout } = state;
-  const hpInfo = hangingProtocolService.getHPInfo();
+  const hpInfo = hangingProtocolService.getState();
   const { protocolId, stageIndex, activeStudyUID } = hpInfo;
   const { protocol } = hangingProtocolService.getActiveProtocol();
   const stage = protocol.stages[stageIndex];

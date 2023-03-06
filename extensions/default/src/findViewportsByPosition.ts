@@ -15,7 +15,7 @@ export const findOrCreateViewport = (
 ) => {
   const byPositionViewport = viewportsByPosition?.[positionId];
   if (byPositionViewport) return { ...byPositionViewport };
-  const { protocolId, stageIndex } = hangingProtocolService.getHPInfo();
+  const { protocolId, stageIndex } = hangingProtocolService.getState();
 
   // Setup the initial in display correctly for initial view/select
   if (!options.inDisplay) {

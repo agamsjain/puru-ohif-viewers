@@ -40,7 +40,12 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
      * the HP id/stageId/index, as well as all tools mark as isVolume, which
      * when isVolume is false.
      */
-    toggleHpTools: ({ isVolume = false, protocol, stage }) => {
+    toggleHpTools: ({
+      isVolume = false,
+      protocol,
+      stageIndex: toggleStageIndex,
+      stage,
+    }) => {
       const active = toolbarService.getActiveTools();
       const enableListener = button => {
         if (!button.id) return;
@@ -54,7 +59,7 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
           items.forEach(enableListener);
         }
         const hpCommand = commands?.find?.(
-          it => it?.commandName && it.commandName.indexOf('Hanging') != -1
+          it => it?.commandName && it.commandName.indexOf('Hanging') !== -1
         );
         if (hpCommand) {
           const { protocolId, stageIndex, stageId } = hpCommand.commandOptions;
@@ -62,10 +67,10 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
           if (protocolId !== undefined && protocolId !== protocol.id) {
             isActive = false;
           }
-          if (stageIndex !== undefined && stageIndex !== stage) {
+          if (stageIndex !== undefined && stageIndex !== toggleStageIndex) {
             isActive = false;
           }
-          if (stageId && stageId !== protocol.stages[stage].id) {
+          if (stageId && stageId !== stage.id) {
             isActive = false;
           }
           toolbarService.setActive(button.id, isActive);
@@ -109,7 +114,7 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
         // Pass in viewportId for the active viewport.  This item will get set as
         // the activeViewportId
         const state = viewportGridService.getState();
-        const hpInfo = hangingProtocolService.getHPInfo();
+        const hpInfo = hangingProtocolService.getState();
         const stateSyncReduce = reuseCachedLayouts(
           state,
           hangingProtocolService,
@@ -138,11 +143,10 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
           });
 
         if (activeStudyUID) {
-          const activeStudy = DicomMetadataStore.getStudy(activeStudyUID);
-          activeStudy && hangingProtocolService.setActiveStudy(activeStudy);
+          hangingProtocolService.setActiveStudyUID(activeStudyUID);
         }
 
-        const storedHanging = `${hangingProtocolService.getActiveProtocol().activeStudyUID
+        const storedHanging = `${hangingProtocolService.getState().activeStudyUID
         }:${protocolId}:${useStageIdx || 0}`;
 
         const restoreProtocol = !!viewportGridStore[storedHanging];
@@ -192,14 +196,15 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
     }: HangingProtocolParams): boolean => {
       const {
         protocol,
-        stage,
-        activeStudyUID,
+        stageIndex: desiredStageIndex,
+        activeStudy,
       } = hangingProtocolService.getActiveProtocol();
       const { toggleHangingProtocol } = stateSyncService.getState();
-      const storedHanging = `${activeStudyUID}:${protocolId}:${stageIndex | 0}`;
+      const storedHanging = `${activeStudy.StudyInstanceUID
+        }:${protocolId}:${stageIndex | 0}`;
       if (
         protocol.id === protocolId &&
-        (stageIndex === undefined || stageIndex === stage)
+        (stageIndex === undefined || stageIndex === desiredStageIndex)
       ) {
         // Toggling off - restore to previous state
         const previousState = toggleHangingProtocol[storedHanging] || {
@@ -210,7 +215,10 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
         stateSyncService.reduce({
           toggleHangingProtocol: {
             ...toggleHangingProtocol,
-            [storedHanging]: { protocolId: protocol.id, stageIndex: stage },
+            [storedHanging]: {
+              protocolId: protocol.id,
+              stageIndex: desiredStageIndex,
+            },
           },
         });
         return actions.setHangingProtocol({ protocolId, stageIndex });
@@ -221,14 +229,14 @@ const commandsModule = ({ servicesManager, commandsManager }) => {
       const {
         protocolId,
         stageIndex: oldStageIndex,
-      } = hangingProtocolService.getHPInfo();
+      } = hangingProtocolService.getState();
       const { protocol } = hangingProtocolService.getActiveProtocol();
       for (
         let stageIndex = oldStageIndex + direction;
         stageIndex >= 0 && stageIndex < protocol.stages.length;
         stageIndex += direction
       ) {
-        if (protocol.stages[stageIndex].enable !== 'disabled') {
+        if (protocol.stages[stageIndex].status !== 'disabled') {
           return actions.setHangingProtocol({
             protocolId,
             stageIndex,

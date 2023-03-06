@@ -1,10 +1,11 @@
 import { PubSubService } from '../_shared/pubSubServiceInterface';
 import sortBy from '../../utils/sortBy';
 import ProtocolEngine from './ProtocolEngine';
-import StudyMetadata from '../../types/StudyMetadata';
+import { StudyMetadata } from '../../types/StudyMetadata';
 import IDisplaySet from '../DisplaySetService/IDisplaySet';
-import { HangingProtocol, CommandsManager, Services } from '../../types';
+import { CommandsManager } from '../../classes';
 import ServicesManager from '../ServicesManager';
+import * as HangingProtocol from '../../types/HangingProtocol';
 
 type Protocol = HangingProtocol.Protocol | HangingProtocol.ProtocolGenerator;
 
@@ -18,14 +19,14 @@ export default class HangingProtocolService extends PubSubService {
     // The PROTOCOL_CHANGED event is fired when the protocol changes
     // and should be immediately applied
     PROTOCOL_CHANGED: 'event::hanging_protocol_changed',
-    // The RESTORE_PROTOCOL event is fired instead of a changed event to indicate
+    // The PROTOCOL_RESTORED event is fired instead of a changed event to indicate
     // that an earlier state has been restored as part of a state update, but
     // is not being directly re-applied, but just restored.
-    RESTORE_PROTOCOL: 'event::hanging_protocol_restore',
+    PROTOCOL_RESTORED: 'event::hanging_protocol_restore',
     // The layout has been decided for the hanging protocol - deprecated
     NEW_LAYOUT: 'event::hanging_protocol_new_layout',
-    // Equivalent to PROTOCOL_CHANGED, except for stage instead.  Moslty
-    // this can be ignored in favour of protocol changed.
+    // Fired when the stages within the current protocol are known to have
+    // the status set - that is, they are activated (or deactivated).
     STAGE_ACTIVATION: 'event::hanging_protocol_stage_activation',
     CUSTOM_IMAGE_LOAD_PERFORMED:
       'event::hanging_protocol_custom_image_load_performed',
@@ -46,7 +47,7 @@ export default class HangingProtocolService extends PubSubService {
   activeProtocolIds: string[];
   // the current protocol that is being applied to the viewports in object format
   protocol: HangingProtocol.Protocol;
-  stage: number;
+  stageIndex = 0;
   _commandsManager: CommandsManager;
   _servicesManager: ServicesManager;
   protocolEngine: ProtocolEngine;
@@ -112,7 +113,7 @@ export default class HangingProtocolService extends PubSubService {
     this.protocols = new Map();
     this.protocolEngine = undefined;
     this.protocol = undefined;
-    this.stage = undefined;
+    this.stageIndex = undefined;
 
     this.studies = [];
   }
@@ -134,31 +135,44 @@ export default class HangingProtocolService extends PubSubService {
   }
 
   /**
-   * Gets the active protocol information
-   * @returns protocol, stage, activeStudyUID
+   * Gets the active protocol information directly, including the direct
+   * protocol, stage and active study objects.
+   * Should NOT be stored longer term as the protocol
+   * object can change internally or be regenerated.
+   * Can be used to store the state to recover from exceptions.
+   *
+   * @returns protocol, stage, activeStudy
    */
   public getActiveProtocol(): {
     protocol: HangingProtocol.Protocol;
-    stage: number;
-    activeStudyUID?: string;
+    stage: HangingProtocol.ProtocolStage;
+    stageIndex: number;
+    activeStudy?: StudyMetadata;
+    viewportMatchDetails: Map<number, HangingProtocol.ViewportMatchDetails>;
+    displaySetMatchDetails: Map<string, HangingProtocol.DisplaySetMatchDetails>;
+    activeImageLoadStrategyName: string;
   } {
     return {
       protocol: this.protocol,
-      stage: this.stage,
-      activeStudyUID: this.activeStudy?.StudyInstanceUID,
+      stage: this.protocol?.stages?.[this.stageIndex],
+      stageIndex: this.stageIndex,
+      activeStudy: this.activeStudy,
+      viewportMatchDetails: this.viewportMatchDetails,
+      displaySetMatchDetails: this.displaySetMatchDetails,
+      activeImageLoadStrategyName: this.activeImageLoadStrategyName,
     };
   }
 
-  /** Gets the HP information, which is like the active protocol but
-   * only includes the ID's rather than the actual instances, for use in
-   * state storage.
+  /** Gets the hanging protocol state information, which is a storable
+   * state information for the hanging protocol consisting of the:
+   * protocolId, stageIndex, stageId and activeStudyUID
    */
-  public getHPInfo(): HangingProtocol.HPInfo {
+  public getState(): HangingProtocol.HPInfo {
     if (!this.protocol) return;
     return {
       protocolId: this.protocol.id,
-      stageIndex: this.stage,
-      stageId: this.protocol.stages[this.stage].id,
+      stageIndex: this.stageIndex,
+      stageId: this.protocol.stages[this.stageIndex].id,
       activeStudyUID: this.activeStudy?.StudyInstanceUID,
     };
   }
@@ -205,12 +219,12 @@ export default class HangingProtocolService extends PubSubService {
    * @param protocolId - the id of the protocol
    * @returns protocol - the protocol with the given id
    */
-  public getProtocolById(id: string): HangingProtocol.Protocol {
-    if (!id) return;
-    if (id === this.protocol?.id) return this.protocol;
-    const protocol = this.protocols.get(id);
+  public getProtocolById(protocolId: string): HangingProtocol.Protocol {
+    if (!protocolId) return;
+    if (protocolId === this.protocol?.id) return this.protocol;
+    const protocol = this.protocols.get(protocolId);
     if (!protocol) {
-      throw new Error(`No protocol ${id} found`);
+      throw new Error(`No protocol ${protocolId} found`);
     }
 
     if (protocol instanceof Function) {
@@ -222,7 +236,7 @@ export default class HangingProtocolService extends PubSubService {
         return generatedProtocol;
       } catch (error) {
         console.warn(
-          `Error while executing protocol generator for protocol ${id}: ${error}`
+          `Error while executing protocol generator for protocol ${protocolId}: ${error}`
         );
       }
     } else {
@@ -292,8 +306,10 @@ export default class HangingProtocolService extends PubSubService {
    * for example, a prior view hanging protocol will NOT show the active study
    * specifically, but will show another study instead.
    */
-  public setActiveStudy(activeStudy: StudyMetadata): void {
-    this.activeStudy = activeStudy;
+  public setActiveStudyUID(activeStudyUID: string): void {
+    this.activeStudy = this.studies.find(
+      it => it.StudyInstanceUID === activeStudyUID
+    );
   }
 
   /**
@@ -316,7 +332,7 @@ export default class HangingProtocolService extends PubSubService {
   public run({ studies, displaySets, activeStudy }, protocolId) {
     this.studies = [...(studies || this.studies)];
     this.displaySets = displaySets;
-    this.setActiveStudy(activeStudy || studies[0]);
+    this.setActiveStudyUID((activeStudy || studies[0])?.StudyInstanceUID);
 
     this.protocolEngine = new ProtocolEngine(
       this.getProtocols(),
@@ -441,29 +457,6 @@ export default class HangingProtocolService extends PubSubService {
     return true;
   }
 
-  _updateActiveStudyWith(list: [], propertyKey: string): void {
-    const activeStudyInstanceUIDs = list
-      .map(item => item[propertyKey])
-      .filter(item => !!item);
-
-    const activeStudyStudyInstanceUID = (activeStudyInstanceUIDs || [])[0];
-    if (!activeStudyInstanceUIDs || activeStudyInstanceUIDs.length !== 1) {
-      console.log(
-        'Update active study: Multi active study not supported yet. Using the first on list'
-      );
-    }
-
-    const activeStudyIndex = this.studies.findIndex(
-      study => study.StudyInstanceUID === activeStudyStudyInstanceUID
-    );
-
-    if (activeStudyIndex >= 0) {
-      this.activeStudy = this.studies[activeStudyIndex];
-    } else {
-      console.log('Update active study: Unable to locate study to be activate');
-    }
-  }
-
   _validateProtocol(
     protocol: HangingProtocol.Protocol
   ): HangingProtocol.Protocol {
@@ -543,7 +536,7 @@ export default class HangingProtocolService extends PubSubService {
   getViewportsRequireUpdate(viewportIndex, displaySetInstanceUID) {
     const newDisplaySetInstanceUID = displaySetInstanceUID;
     const protocol = this.protocol;
-    const protocolStage = protocol.stages[this.stage];
+    const protocolStage = protocol.stages[this.stageIndex];
     const protocolViewports = protocolStage.viewports;
     const protocolViewport = protocolViewports[viewportIndex];
 
@@ -727,7 +720,7 @@ export default class HangingProtocolService extends PubSubService {
    *
    * @returns the stage number to apply initially, given the options.
    */
-  private _updateStageActivation(
+  private _updateStageStatus(
     options = null as HangingProtocol.SetProtocolOptions
   ) {
     const stages = this.protocol.stages;
@@ -737,28 +730,28 @@ export default class HangingProtocolService extends PubSubService {
         stage.requiredViewports === undefined &&
         stage.preferredViewports === undefined
       ) {
-        stage.enable = 'enabled';
+        stage.status = 'enabled';
         continue;
       }
 
       const { displaySetSelectors } = this.protocol;
       const { requiredDs = [] } = stage;
-      stage.enable = 'enabled';
+      stage.status = 'enabled';
       for (const dsName of requiredDs) {
         const displaySetSelector = displaySetSelectors[dsName];
         if (!displaySetSelector) {
           console.warn('No display set selector for', dsName);
-          stage.enable = 'disabled';
+          stage.status = 'disabled';
           break;
         }
         const { bestMatch } = this._matchImages(displaySetSelector);
         if (!bestMatch) {
-          stage.enable = 'disabled';
+          stage.status = 'disabled';
           console.log('requiredDs failed to match', dsName, stage.name);
           break;
         }
       }
-      if (stage.enable === 'disabled') {
+      if (stage.status === 'disabled') {
         continue;
       }
 
@@ -767,7 +760,7 @@ export default class HangingProtocolService extends PubSubService {
         options,
         new Map()
       );
-      stage.enable =
+      stage.status =
         (matchedViewports >= stage.preferredViewports && 'enabled') ||
         (matchedViewports >= stage.requiredViewports && 'passive') ||
         'disabled';
@@ -779,7 +772,7 @@ export default class HangingProtocolService extends PubSubService {
     });
   }
 
-  private _findStage(
+  private _findStageIndex(
     options = null as HangingProtocol.SetProtocolOptions
   ): number | void {
     const stageId = options?.stageId;
@@ -789,21 +782,21 @@ export default class HangingProtocolService extends PubSubService {
     if (stageId) {
       for (let i = 0; i < stages.length; i++) {
         const stage = stages[i];
-        if (stage.id === stageId && stage.enable !== 'disabled') return i;
+        if (stage.id === stageId && stage.status !== 'disabled') return i;
       }
       return;
     }
 
     const stageIndex = options?.stageIndex;
     if (stageIndex !== undefined) {
-      return stages[stageIndex]?.enable !== 'disabled' ? stageIndex : undefined;
+      return stages[stageIndex]?.status !== 'disabled' ? stageIndex : undefined;
     }
 
     let firstNotDisabled: number;
 
     for (let i = 0; i < stages.length; i++) {
-      if (stages[i].enable === 'enabled') return i;
-      if (firstNotDisabled === undefined && stages[i].enable !== 'disabled') {
+      if (stages[i].status === 'enabled') return i;
+      if (firstNotDisabled === undefined && stages[i].status !== 'disabled') {
         firstNotDisabled = i;
       }
     }
@@ -811,26 +804,15 @@ export default class HangingProtocolService extends PubSubService {
     return firstNotDisabled;
   }
 
-  /** Gets the current state, used to record the state when trying to apply items */
-  public getCurrentState(): Record<string, unknown> {
-    return {
-      protocol: this.protocol,
-      stage: this.stage,
-      viewportMatchDetails: this.viewportMatchDetails,
-      displaySetMatchDetails: this.displaySetMatchDetails,
-      activeImageLoadStrategyName: this.activeImageLoadStrategyName,
-    };
-  }
-
   private _setProtocol(
     protocol: HangingProtocol.Protocol,
     options = null as HangingProtocol.SetProtocolOptions
   ): void {
-    const old = this.getCurrentState();
+    const old = this.getActiveProtocol();
 
     try {
       if (!this.protocol || this.protocol.id !== protocol.id) {
-        this.stage = options?.stageIndex || 0;
+        this.stageIndex = options?.stageIndex || 0;
         this.protocol = this._copyProtocol(protocol);
 
         const { imageLoadStrategy } = protocol;
@@ -844,16 +826,16 @@ export default class HangingProtocolService extends PubSubService {
           }
         }
 
-        this._updateStageActivation(options);
+        this._updateStageStatus(options);
       }
 
-      const stage = this._findStage(options);
+      const stage = this._findStageIndex(options);
       if (stage === undefined) {
         throw new Error(
           `Can't find applicable stage ${protocol.id} ${options?.stageIndex}`
         );
       }
-      this.stage = stage as number;
+      this.stageIndex = stage as number;
       this._updateViewports(options);
     } catch (error) {
       console.log(error);
@@ -866,22 +848,22 @@ export default class HangingProtocolService extends PubSubService {
         viewportMatchDetails: this.viewportMatchDetails,
         displaySetMatchDetails: this.displaySetMatchDetails,
         protocol: this.protocol,
-        stageIdx: this.stage,
-        stage: this.protocol.stages[this.stage],
+        stageIdx: this.stageIndex,
+        stage: this.protocol.stages[this.stageIndex],
         activeStudyUID: this.activeStudy?.StudyInstanceUID,
       });
     } else {
-      this._broadcastEvent(HangingProtocolService.EVENTS.RESTORE_PROTOCOL, {
+      this._broadcastEvent(HangingProtocolService.EVENTS.PROTOCOL_RESTORED, {
         protocol: this.protocol,
-        stageIdx: this.stage,
-        stage: this.protocol.stages[this.stage],
+        stageIdx: this.stageIndex,
+        stage: this.protocol.stages[this.stageIndex],
         activeStudyUID: this.activeStudy?.StudyInstanceUID,
       });
     }
   }
 
-  public getStageIndex(hpId: string, options): number {
-    const protocol = this.getProtocolById(hpId);
+  public getStageIndex(protocolId: string, options): number {
+    const protocol = this.getProtocolById(protocolId);
     const { stageId, stageIndex } = options;
     if (stageId !== undefined) {
       return protocol.stages.findIndex(it => it.id === stageId);
@@ -912,7 +894,7 @@ export default class HangingProtocolService extends PubSubService {
    * @returns {*} The Stage model for the currently displayed Stage
    */
   _getCurrentStageModel() {
-    return this.protocol.stages[this.stage];
+    return this.protocol.stages[this.stageIndex];
   }
 
   /**
@@ -925,14 +907,14 @@ export default class HangingProtocolService extends PubSubService {
    * viewport object (which this class knows nothing about).
    */
   public getMissingViewport(
-    hangingProtocolId: string,
+    protocolId: string,
     stageIdx: number,
     positionId: string,
     options
   ): HangingProtocol.ViewportMatchDetails {
-    if (this.protocol.id !== hangingProtocolId) {
+    if (this.protocol.id !== protocolId) {
       throw new Error(
-        `Currently applied protocol ${this.protocol.id} is different from ${hangingProtocolId}`
+        `Currently applied protocol ${this.protocol.id} is different from ${protocolId}`
       );
     }
     const protocol = this.protocol;
@@ -1003,7 +985,7 @@ export default class HangingProtocolService extends PubSubService {
     });
 
     // Loop through each viewport
-    this._matchAllViewports(this.protocol.stages[this.stage], options);
+    this._matchAllViewports(this.protocol.stages[this.stageIndex], options);
   }
 
   private _matchAllViewports(
@@ -1399,7 +1381,7 @@ export default class HangingProtocolService extends PubSubService {
   _isNextStageAvailable() {
     const numberOfStages = this._getNumProtocolStages();
 
-    return this.stage + 1 < numberOfStages;
+    return this.stageIndex + 1 < numberOfStages;
   }
 
   /**
@@ -1407,7 +1389,7 @@ export default class HangingProtocolService extends PubSubService {
    * @return {Boolean} True if previous stage is available or false otherwise
    */
   _isPreviousStageAvailable(): boolean {
-    return this.stage - 1 >= 0;
+    return this.stageIndex - 1 >= 0;
   }
 
   /**
@@ -1424,11 +1406,11 @@ export default class HangingProtocolService extends PubSubService {
     // Check if previous or next stage is available
     let i;
     for (
-      i = this.stage + stageAction;
+      i = this.stageIndex + stageAction;
       i >= 0 && i < this.protocol.stages.length;
       i += stageAction
     ) {
-      if (this.protocol.stages[i].enable !== 'disabled') {
+      if (this.protocol.stages[i].status !== 'disabled') {
         break;
       }
     }
@@ -1437,10 +1419,12 @@ export default class HangingProtocolService extends PubSubService {
     }
 
     // Sets the new stage
-    this.stage = i;
+    this.stageIndex = i;
 
     // Log the new stage
-    this.debug(`ProtocolEngine::setCurrentProtocolStage stage = ${this.stage}`);
+    this.debug(
+      `ProtocolEngine::setCurrentProtocolStage stage = ${this.stageIndex}`
+    );
 
     // Since stage has changed, we need to update the viewports
     // and redo matchings
@@ -1452,8 +1436,8 @@ export default class HangingProtocolService extends PubSubService {
       viewportMatchDetails: this.viewportMatchDetails,
       displaySetMatchDetails: this.displaySetMatchDetails,
       protocol: this.protocol,
-      stageIdx: this.stage,
-      stage: this.protocol.stages[this.stage],
+      stageIdx: this.stageIndex,
+      stage: this.protocol.stages[this.stageIndex],
     });
     return true;
   }

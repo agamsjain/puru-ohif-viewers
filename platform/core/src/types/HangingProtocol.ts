@@ -180,7 +180,7 @@ export type Viewport = {
  * filled.
  * passive stages have the requiredDs and at least requiredViewports filled.
  */
-export type StageEnabled = 'disabled' | 'enabled' | 'passive';
+export type StageStatus = 'disabled' | 'enabled' | 'passive';
 
 /**
  * Protocol stages are a set of different views which can be applied, for
@@ -199,7 +199,7 @@ export type ProtocolStage = {
   viewportStructure: ViewportStructure;
   viewports: Viewport[];
   /** Indicate if the stage can be applied or not */
-  enable?: StageEnabled;
+  status?: StageStatus;
   /** The number of viewports that must have matching display sets to
    * display differentiate between 'disabled' and other states. */
   requiredViewports?: number;
