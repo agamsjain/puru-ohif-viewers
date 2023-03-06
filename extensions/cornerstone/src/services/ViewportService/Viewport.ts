@@ -45,6 +45,11 @@ export type PublicViewportOptions = {
   allowUnmatchedView?: boolean;
 };
 
+export type DisplaySetSelector = {
+  id?: string;
+  options?: PublicDisplaySetOptions;
+};
+
 export type PublicDisplaySetOptions = {
   voi?: VOI;
   voiInverted?: boolean;
@@ -244,11 +249,12 @@ class ViewportInfo {
   }
 
   private mapDisplaySetOptions(
-    publicDisplaySetOptions: Array<PublicDisplaySetOptions> = [{}]
+    displaySetSelectors: Array<DisplaySetSelector> = [{}]
   ): Array<DisplaySetOptions> {
     const displaySetOptions: Array<DisplaySetOptions> = [];
 
-    publicDisplaySetOptions.forEach(option => {
+    displaySetSelectors.forEach(selector => {
+      let option = selector?.options;
       if (!option) {
         option = {
           blendMode: undefined,
