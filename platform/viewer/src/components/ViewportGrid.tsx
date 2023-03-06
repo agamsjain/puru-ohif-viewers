@@ -423,7 +423,7 @@ ViewerViewportGrid.defaultProps = {
 function _getViewportComponent(
   displaySets,
   viewportComponents,
-  UINotificationService
+  uiNotificationService
 ) {
   if (!displaySets || !displaySets.length) {
     return EmptyViewport;
@@ -448,7 +448,7 @@ function _getViewportComponent(
   }
 
   console.log("Can't show displaySet", SOPClassHandlerId, displaySets[0]);
-  UINotificationService.show({
+  uiNotificationService.show({
     title: 'Viewport Not Supported Yet',
     message: `Cannot display SOPClassId of ${displaySets[0].SOPClassUID} yet`,
     type: 'error',
