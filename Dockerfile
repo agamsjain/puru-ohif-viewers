@@ -67,6 +67,7 @@ ENV PORT=80
 RUN rm /etc/nginx/conf.d/default.conf
 USER nginx
 COPY --chown=nginx:nginx .docker/Viewer-v3.x /usr/src
+COPY nginx.conf /etc/nginx/nginx.conf
 RUN chmod 777 /usr/src/entrypoint.sh
 COPY --from=builder /usr/src/app/platform/viewer/dist /usr/share/nginx/html
 ENTRYPOINT ["/usr/src/entrypoint.sh"]
