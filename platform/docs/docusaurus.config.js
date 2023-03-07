@@ -53,7 +53,7 @@ const isI18nStaging = process.env.I18N_STAGING === 'true';
 module.exports = {
   title: 'OHIF',
   tagline: 'Open-source web-based medical imaging platform',
-  organizationName: 'Open Health Imaging Foundation',
+  organizationName: '1 Open Health Imaging Foundation',
   projectName: 'OHIF',
   baseUrl,
   baseUrlIssueBanner: true,
