@@ -16,7 +16,13 @@ const serviceImplementation = {
   _getState: () => console.warn('getState() NOT IMPLEMENTED'),
   _setUser: () => console.warn('_setUser() NOT IMPLEMENTED'),
   _getUser: () => console.warn('_setUser() NOT IMPLEMENTED'),
-  _getAuthorizationHeader: () => {}, // TODO: have enabled/disabled state?
+  _getAuthorizationHeader: () => {
+    var access_token =
+      'ya29.a0AWY7CklBYJFIJGlmnPjFa1OfIAKjfb0EzLqEpfY0lRUQ_2XFCy5I-idYKeMY1ZcwnFlqHsBimTYP9JzzW5EW59vyfBkanpilwbRE3n9ygl_d3p3A2o4E2AGFEerJuG9Sa4AidAzEnOZrhEbHgjF8guyo8MQu4oYaCgYKAdMSARASFQG1tDrp-BFtm-ZVKt4pYdfTXuYAng0166';
+    return {
+      Authorization: `Bearer ${access_token}`,
+    };
+  }, // TODO: have enabled/disabled state?
   //console.warn('_getAuthorizationHeader() NOT IMPLEMENTED'),
   _handleUnauthenticated: () =>
     console.warn('_handleUnauthenticated() NOT IMPLEMENTED'),
