@@ -85,8 +85,13 @@ describe('OHIF Cornerstone Toolbar', () => {
       .trigger('mousemove', 'right', { buttons: 1, force: true })
       .trigger('mouseup', { buttons: 1 });
 
-    const expectedText = 'W:1930L:479';
-    cy.get('@viewportInfoTopLeft').should('have.text', expectedText);
+    // The exact text is slightly dependent on the viewport resolution, so leave a range
+    cy.get('@viewportInfoTopLeft').should($txt => {
+      const text = $txt.text();
+      expect(text)
+        .to.include('W:193')
+        .include('L:479');
+    });
   });
 
   it('checks if Pan tool will move the image inside the viewport', () => {
@@ -106,12 +111,8 @@ describe('OHIF Cornerstone Toolbar', () => {
   it('checks if Length annotation can be added to viewport and shows up in the measurements panel', () => {
     //Click on button and verify if icon is active on toolbar
     cy.addLengthMeasurement();
-    cy.get('[data-cy="measurement-tracking-prompt-begin-tracking"]').should(
-      'exist'
-    );
-    cy.get('[data-cy="measurement-tracking-prompt-begin-tracking"]').should(
-      'be.visible'
-    );
+    cy.get('[data-cy="viewport-notification"]').should('exist');
+    cy.get('[data-cy="viewport-notification"]').should('be.visible');
     cy.get('[data-cy="prompt-begin-tracking-yes"]').click();
 
     //Verify the measurement exists in the table

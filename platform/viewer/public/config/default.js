@@ -15,12 +15,26 @@ window.config = {
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
   showLoadingIndicator: true,
+  strictZSpacingForVolumeViewport: true,
   maxNumRequests: {
     interaction: 100,
     thumbnail: 75,
-    prefetch: 10,
+    // Prefetch number is dependent on the http protocol. For http 2 or
+    // above, the number of requests can be go a lot higher.
+    prefetch: 25,
   },
   // filterQueryParam: false,
+  defaultDataSourceName: 'dicomweb',
+  /* Dynamic config allows user to pass "configUrl" query string this allows to load config without recompiling application. The regex will ensure valid configuration source */
+  // dangerouslyUseDynamicConfig: {
+  //   enabled: true,
+  //   // regex will ensure valid configuration source and default is /.*/ which matches any character. To use this, setup your own regex to choose a specific source of configuration only.
+  //   // Example 1, to allow numbers and letters in an absolute or sub-path only.
+  //   // regex: /(0-9A-Za-z.]+)(\/[0-9A-Za-z.]+)*/
+  //   // Example 2, to restricts to either hosptial.com or othersite.com.
+  //   // regex: /(https:\/\/hospital.com(\/[0-9A-Za-z.]+)*)|(https:\/\/othersite.com(\/[0-9A-Za-z.]+)*)/
+  //   regex: /.*/,
+  // },
   dataSources: [
     {
       friendlyName: 'dcmjs DICOMWeb Server',
@@ -32,10 +46,12 @@ window.config = {
         // wadoUriRoot: 'https://server.dcmjs.org/dcm4chee-arc/aets/DCM4CHEE/wado',
         // qidoRoot: 'https://server.dcmjs.org/dcm4chee-arc/aets/DCM4CHEE/rs',
         // wadoRoot: 'https://server.dcmjs.org/dcm4chee-arc/aets/DCM4CHEE/rs',
+
         // new server
         wadoUriRoot: 'https://domvja9iplmyu.cloudfront.net/dicomweb',
         qidoRoot: 'https://domvja9iplmyu.cloudfront.net/dicomweb',
         wadoRoot: 'https://domvja9iplmyu.cloudfront.net/dicomweb',
+
         qidoSupportsIncludeField: false,
         supportsReject: false,
         imageRendering: 'wadors',
@@ -45,6 +61,15 @@ window.config = {
         supportsWildcard: true,
         staticWado: true,
         singlepart: 'bulkdata,video,pdf',
+        useBulkDataURI: false,
+      },
+    },
+    {
+      friendlyName: 'dicomweb delegating proxy',
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomwebproxy',
+      sourceName: 'dicomwebproxy',
+      configuration: {
+        name: 'dicomwebproxy',
       },
     },
     {
@@ -82,13 +107,12 @@ window.config = {
   //       },
   //       React.createElement('img',
   //         {
-  //           src: './customLogo.svg',
+  //           src: './assets/customLogo.svg',
   //           className: 'w-8 h-8',
   //         }
   //       ))
   //   },
   // },
-  defaultDataSourceName: 'dicomweb',
   hotkeys: [
     {
       commandName: 'incrementActiveViewport',
