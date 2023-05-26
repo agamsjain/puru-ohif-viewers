@@ -12,27 +12,27 @@ window.config = {
   showLoadingIndicator: true,
   strictZSpacingForVolumeViewport: true,
   // This is an array, but we'll only use the first entry for now
-  oidc: [
-    {
-      // ~ REQUIRED
-      // Authorization Server URL
-      authority: 'https://accounts.google.com',
-      client_id:
-        '766256023666-242tkcu7jgjrod1ao7dlk083n2erklr0.apps.googleusercontent.com',
-      redirect_uri: '/callback',
-      response_type: 'id_token token',
-      scope:
-        'email profile openid https://www.googleapis.com/auth/cloudplatformprojects.readonly https://www.googleapis.com/auth/cloud-healthcare', // email profile openid
-      // ~ OPTIONAL
-      post_logout_redirect_uri: '/logout-redirect.html',
-      revoke_uri: 'https://accounts.google.com/o/oauth2/revoke?token=',
-      automaticSilentRenew: true,
-      revokeAccessTokenOnSignout: true,
-    },
-  ],
+  // oidc: [
+  //   {
+  //     // ~ REQUIRED
+  //     // Authorization Server URL
+  //     authority: 'https://accounts.google.com',
+  //     client_id:
+  //       '766256023666-242tkcu7jgjrod1ao7dlk083n2erklr0.apps.googleusercontent.com',
+  //     redirect_uri: '/callback',
+  //     response_type: 'id_token token',
+  //     scope:
+  //       'email profile openid https://www.googleapis.com/auth/cloudplatformprojects.readonly https://www.googleapis.com/auth/cloud-healthcare', // email profile openid
+  //     // ~ OPTIONAL
+  //     post_logout_redirect_uri: '/logout-redirect.html',
+  //     revoke_uri: 'https://accounts.google.com/o/oauth2/revoke?token=',
+  //     automaticSilentRenew: true,
+  //     revokeAccessTokenOnSignout: true,
+  //   },
+  // ],
   extensions: [],
   modes: [],
-  showStudyList: true,
+  showStudyList: false,
   // filterQueryParam: false,
   defaultDataSourceName: 'dicomweb',
   dataSources: [
@@ -54,7 +54,7 @@ window.config = {
         enableStudyLazyLoad: true,
         supportsFuzzyMatching: true,
         supportsWildcard: false,
-        dicomUploadEnabled: true,
+        dicomUploadEnabled: false,
       },
     },
     {

@@ -96,6 +96,24 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
         query.getAll('StudyInstanceUIDs')
       );
 
+      const ds = query.getAll('ds');
+      const GCP_URL =
+        'https://healthcare.googleapis.com/v1/projects/puru-255206/locations/asia-south1/datasets/puru-dataset-01/dicomStores/prod-datastore-01/dicomWeb';
+
+      dicomWebConfig.wadoRoot = GCP_URL;
+      qidoDicomWebClient.baseURL = GCP_URL;
+      qidoDicomWebClient.qidoURL = GCP_URL;
+      qidoDicomWebClient.wadoURL = GCP_URL;
+      qidoDicomWebClient.stowURL = GCP_URL;
+
+      wadoDicomWebClient.baseURL = GCP_URL;
+      wadoDicomWebClient.qidoURL = GCP_URL;
+      wadoDicomWebClient.wadoURL = GCP_URL;
+      wadoDicomWebClient.stowURL = GCP_URL;
+
+      console.log('StudyInstanceUID:' + queryStudyInstanceUIDs);
+      console.log('DS:' + ds);
+
       const StudyInstanceUIDs =
         (queryStudyInstanceUIDs.length && queryStudyInstanceUIDs) ||
         paramsStudyInstanceUIDs;
