@@ -17,8 +17,15 @@ const serviceImplementation = {
   _setUser: () => console.warn('_setUser() NOT IMPLEMENTED'),
   _getUser: () => console.warn('_setUser() NOT IMPLEMENTED'),
   _getAuthorizationHeader: () => {
-    var access_token =
-      'ya29.a0AWY7Ckl480BzZ2eHbVrxJBgO28MehvcOQm2Fy2gVeIlZPuWifnjreHAdNd2NIvfiJYUeNHedxmbb5JVUnTOxFMAuzDsJoQYY1gdSpHQEzJfuDZdC96ACFDAR0SvjJo9ARoa5e7UKUsKlbZ1oCWA3zzABq0ho4okaCgYKAcsSARASFQG1tDrpWBOiKXURmQ8DEmi1qGPzEA0166';
+    var access_token = localStorage.getItem('at');
+
+    let x = document.cookie;
+    const cookiesList = x.split(';');
+    cookiesList.forEach(cookie => {
+      if (cookie.startsWith(' pat')) access_token = cookie.split('=')[1];
+    });
+
+    console.log('AT Found: ' + access_token);
     return {
       Authorization: `Bearer ${access_token}`,
     };

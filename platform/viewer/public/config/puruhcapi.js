@@ -72,4 +72,22 @@ window.config = {
       configuration: {},
     },
   ],
+
+  whiteLabeling: {
+    createLogoComponentFn: function(React) {
+      return React.createElement(
+        'a',
+        {
+          target: '_self',
+          rel: 'noopener noreferrer',
+          className: 'text-purple-600 line-through',
+          href: '/',
+        },
+        React.createElement('img', {
+          src: './assets/puru-logo.svg',
+          // className: 'w-8 h-8',
+        })
+      );
+    },
+  },
 };

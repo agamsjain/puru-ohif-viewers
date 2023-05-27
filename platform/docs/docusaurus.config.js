@@ -51,9 +51,9 @@ const isI18nStaging = process.env.I18N_STAGING === 'true';
 
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
 module.exports = {
-  title: 'OHIF',
-  tagline: 'Open-source web-based medical imaging platform',
-  organizationName: 'Open Health Imaging Foundation',
+  title: 'Puru DViewer',
+  tagline: '',
+  organizationName: 'Puru Technologies',
   projectName: 'OHIF',
   baseUrl,
   baseUrlIssueBanner: true,

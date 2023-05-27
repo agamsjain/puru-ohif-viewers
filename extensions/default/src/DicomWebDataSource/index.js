@@ -24,6 +24,7 @@ import {
 } from './retrieveStudyMetadata.js';
 import StaticWadoClient from './utils/StaticWadoClient';
 import getDirectURL from '../utils/getDirectURL';
+// import Cookies from 'js-cookie';
 
 const { DicomMetaDictionary, DicomDict } = dcmjs.data;
 
@@ -96,9 +97,37 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
         query.getAll('StudyInstanceUIDs')
       );
 
-      const ds = query.getAll('ds');
-      const GCP_URL =
-        'https://healthcare.googleapis.com/v1/projects/puru-255206/locations/asia-south1/datasets/puru-dataset-01/dicomStores/prod-datastore-01/dicomWeb';
+      let GCP_URL = 'https://healthcare.googleapis.com/v1/projects';
+
+      let x = document.cookie;
+      const cookiesList = x.split(';');
+      cookiesList.forEach(cookie => {
+        if (cookie.startsWith(' ' + queryStudyInstanceUIDs[0])) {
+          const cookieSplit = cookie.split('=');
+          const valueList = cookieSplit[1].split('%3B');
+          const projectId = valueList[0];
+          const region = valueList[1];
+          const dataset = valueList[2];
+          const datastore = valueList[3];
+
+          GCP_URL =
+            GCP_URL +
+            '/' +
+            projectId +
+            '/locations/' +
+            region +
+            '/datasets/' +
+            dataset +
+            '/dicomStores/' +
+            datastore +
+            '/dicomWeb';
+          console.log(GCP_URL);
+        }
+      });
+
+      // const ds = query.getAll('ds');
+      // const GCP_URL =
+      // 'https://healthcare.googleapis.com/v1/projects/puru-255206/locations/asia-south1/datasets/puru-dataset-01/dicomStores/prod-datastore-01/dicomWeb';
 
       dicomWebConfig.wadoRoot = GCP_URL;
       qidoDicomWebClient.baseURL = GCP_URL;
@@ -112,7 +141,9 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
       wadoDicomWebClient.stowURL = GCP_URL;
 
       console.log('StudyInstanceUID:' + queryStudyInstanceUIDs);
-      console.log('DS:' + ds);
+      // console.log('DS:' + ds);
+
+
 
       const StudyInstanceUIDs =
         (queryStudyInstanceUIDs.length && queryStudyInstanceUIDs) ||
